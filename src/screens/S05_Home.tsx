@@ -3,211 +3,71 @@ import { useNavigate } from 'react-router-dom'
 import { DeviceFrame, Content } from '../components/DeviceFrame'
 import { Button } from '../components/Button'
 import { CrowdBadge } from '../components/CrowdBadge'
+import {
+  AmberBox,
+  AmberCrowdBadge,
+  AmberHomeHeader,
+  AmberShell,
+  LastKnownLabel,
+  OfflineBanner,
+  Skeleton,
+  SplitButton,
+} from '../components/amber'
 import { useStore } from '../lib/store'
 import { TRAINS } from '../lib/mockData'
+import { urlState, useOnline } from '../lib/useOnline'
 
 /**
- * S05 — Home.
- * Query `?state=loading|empty|offline|location-off` renders the documented
- * alternate states (S05a/S05b/S05c/S05_Location_Off).
+ * S05 — Home (mono) plus its four documented state screens, which use the
+ * amber system in the Figma file:
+ *   S05a_Loading · S05b_Empty · S05c_Offline · S05_Location_Off
+ *
+ * States resolve in this order: `?state=` → real connectivity → natural load.
  */
 
 type Mode = 'ready' | 'loading' | 'empty' | 'offline' | 'location-off'
 
-function useMode(): [Mode, (m: Mode) => void] {
-  const [mode, setMode] = useState<Mode>(
-    () => (new URLSearchParams(location.search).get('state') as Mode) || 'ready',
-  )
-  return [mode, setMode]
-}
-
-/** Small dev-only state switcher so every documented state is reachable. */
-function StateJump({ mode, setMode }: { mode: Mode; setMode: (m: Mode) => void }) {
-  const options: Mode[] = ['ready', 'loading', 'empty', 'offline', 'location-off']
-  return (
-    <select
-      aria-label="Preview state"
-      value={mode}
-      onChange={e => {
-        const v = e.target.value as Mode
-        setMode(v)
-        const url = new URL(location.href)
-        if (v === 'ready') url.searchParams.delete('state')
-        else url.searchParams.set('state', v)
-        history.replaceState(null, '', url)
-      }}
-      className="mb-3 w-full rounded-[8px] border border-dashed border-[#B8B8B8] bg-white px-3 py-2 text-[12px] text-[#616161]"
-    >
-      {options.map(o => (
-        <option key={o} value={o}>
-          state: {o}
-        </option>
-      ))}
-    </select>
-  )
+const AMBER_ROUTE = {
+  from: 'ANDHERI',
+  to: 'CHURCHGATE',
+  line: 'Western Line',
+  usual: '08:40',
 }
 
 export function Home() {
   const navigate = useNavigate()
   const { state } = useStore()
-  const [mode, setMode] = useMode()
+  const online = useOnline()
+  const forced = urlState() as Mode | null
 
-  // brief loading flash on first mount, mirroring S05a
+  // natural: a brief first-load skeleton per browser session (S05a)
+  const [firstLoad, setFirstLoad] = useState(() => !sessionStorage.getItem('saath.loaded'))
+
+  const mode: Mode = forced ?? (!online ? 'offline' : firstLoad ? 'loading' : 'ready')
+
   useEffect(() => {
-    if (mode === 'loading') {
-      const t = setTimeout(() => setMode('ready'), 1600)
-      return () => clearTimeout(t)
-    }
-  }, [mode, setMode])
+    // URL-forced states persist so every design state stays inspectable
+    if (mode !== 'loading' || forced) return
+    const t = setTimeout(() => {
+      sessionStorage.setItem('saath.loaded', '1')
+      setFirstLoad(false)
+    }, 700)
+    return () => clearTimeout(t)
+  }, [mode, forced])
 
+  if (mode !== 'ready') {
+    return (
+      <HomeState mode={mode} onOpenSetup={() => navigate('/setup')} onOpenSmart={() => navigate('/smart-window')} onOpenTrain={(id) => navigate(`/train/${id}`)} />
+    )
+  }
+
+  /* ---------------- ready (S05, mono) ---------------- */
   const firstName = 'Asha'
   const primary = TRAINS[0]
 
-  /* ---------------- loading (S05a) ---------------- */
-  if (mode === 'loading') {
-    return (
-      <DeviceFrame>
-        <Content className="flex flex-col">
-          <StateJump mode={mode} setMode={setMode} />
-          <h1 className="text-[24px] leading-[29px] font-semibold">Good morning, {firstName}</h1>
-          <p className="mt-1 text-[12px] text-[#616161]">Illustrative train data · Not live</p>
-
-          <div className="mt-5 space-y-3" aria-busy="true" aria-live="polite">
-            <span className="sr-only">Loading next trains…</span>
-            {[0, 1, 2].map(i => (
-              <div
-                key={i}
-                className="h-[92px] animate-pulse rounded-[8px] border border-[#DDDDDD] bg-[#F2F2F2]"
-                style={{ animationDelay: `${i * 140}ms` }}
-              />
-            ))}
-          </div>
-        </Content>
-      </DeviceFrame>
-    )
-  }
-
-  /* ---------------- empty (S05b) ---------------- */
-  if (mode === 'empty') {
-    return (
-      <DeviceFrame>
-        <Content className="flex flex-col">
-          <StateJump mode={mode} setMode={setMode} />
-          <h1 className="text-[24px] leading-[29px] font-semibold">Good morning, {firstName}</h1>
-          <p className="mt-1 text-[12px] text-[#616161]">Illustrative train data · Not live</p>
-
-          <div className="mt-8 flex flex-col items-center rounded-[8px] border border-[#DDDDDD] px-5 py-10 text-center">
-            <span aria-hidden className="text-[40px]">
-              🚃
-            </span>
-            <h2 className="mt-3 text-[18px] font-semibold">No trains yet</h2>
-            <p className="mt-2 text-[14px] leading-[20px] text-[#616161]">
-              Set your usual journey and we’ll show the next departures here.
-            </p>
-            <div className="mt-5 w-full">
-              <Button onClick={() => navigate('/setup')}>Set usual journey</Button>
-            </div>
-          </div>
-        </Content>
-      </DeviceFrame>
-    )
-  }
-
-  /* ---------------- offline (S05c) ---------------- */
-  if (mode === 'offline') {
-    return (
-      <DeviceFrame>
-        <Content className="flex flex-col">
-          <StateJump mode={mode} setMode={setMode} />
-          <div
-            role="status"
-            className="mb-4 rounded-[8px] border border-[#202020] bg-[#F2F2F2] px-4 py-3 text-[14px] leading-[20px]"
-          >
-            <strong className="font-semibold">You’re offline.</strong> Showing the last saved
-            schedule — times may be out of date.
-          </div>
-
-          <h1 className="text-[24px] leading-[29px] font-semibold">Good morning, {firstName}</h1>
-          <p className="mt-1 text-[12px] text-[#616161]">Cached data · Last updated 08:12</p>
-
-          <div className="mt-4 space-y-3">
-            {TRAINS.slice(0, 2).map(t => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => navigate(`/train/${t.id}`)}
-                className="flex w-full items-center justify-between rounded-[8px] border border-[#DDDDDD] bg-white px-4 py-4 text-left"
-              >
-                <span>
-                  <span className="block text-[18px] font-semibold">
-                    {t.departure} · in {t.inMinutes} min
-                  </span>
-                  <span className="mt-1 block text-[12px] text-[#616161]">
-                    {t.platform} · {t.arrival} arrival
-                  </span>
-                </span>
-                <CrowdBadge level={t.crowd} />
-              </button>
-            ))}
-          </div>
-
-          <div className="mt-4">
-            <Button variant="secondary" onClick={() => setMode('ready')}>
-              Try again
-            </Button>
-          </div>
-        </Content>
-      </DeviceFrame>
-    )
-  }
-
-  /* ---------------- location off (S05_Location_Off) ---------------- */
-  if (mode === 'location-off') {
-    return (
-      <DeviceFrame>
-        <Content className="flex flex-col">
-          <StateJump mode={mode} setMode={setMode} />
-          <div
-            role="status"
-            className="rounded-[8px] border border-[#DDDDDD] bg-[#F2F2F2] px-4 py-3"
-          >
-            <p className="text-[14px] leading-[20px]">
-              <strong className="font-semibold">Location is off.</strong> We can’t suggest nearby
-              stations until you allow location access.
-            </p>
-            <div className="mt-3 flex gap-2">
-              <Button
-                full={false}
-                className="min-h-[40px] px-4 text-[14px]"
-                onClick={() => navigate('/setup')}
-              >
-                Open settings
-              </Button>
-              <Button
-                full={false}
-                variant="secondary"
-                className="min-h-[40px] px-4 text-[14px]"
-                onClick={() => setMode('ready')}
-              >
-                Continue without
-              </Button>
-            </div>
-          </div>
-
-          <h1 className="mt-4 text-[24px] leading-[29px] font-semibold">
-            Good morning, {firstName}
-          </h1>
-          <div className="mt-4">{trainList(navigate, false)}</div>
-        </Content>
-      </DeviceFrame>
-    )
-  }
-
-  /* ---------------- ready (S05) ---------------- */
   return (
     <DeviceFrame>
       <Content className="flex flex-col">
-        <StateJump mode={mode} setMode={setMode} />
         <h1 className="text-[24px] leading-[29px] font-semibold">Good morning, {firstName}</h1>
         <p className="mt-1 text-[12px] text-[#616161]">Illustrative train data · Not live</p>
 
@@ -249,7 +109,27 @@ export function Home() {
           <span className="text-[12px] text-[#616161]">Slow · Southbound</span>
         </div>
 
-        <div className="mt-3">{trainList(navigate, true)}</div>
+        <ul className="mt-3 space-y-3">
+          {TRAINS.slice(0, 3).map(t => (
+            <li key={t.id}>
+              <button
+                type="button"
+                onClick={() => navigate(`/train/${t.id}`)}
+                className="flex w-full items-center justify-between rounded-[8px] border border-[#DDDDDD] bg-white px-4 py-4 text-left transition-colors hover:bg-[#FAFAFA]"
+              >
+                <span>
+                  <span className="block text-[18px] leading-[23px] font-semibold">
+                    {t.departure} · in {t.inMinutes} min
+                  </span>
+                  <span className="mt-1 block text-[12px] leading-[15px] text-[#616161]">
+                    {t.platform} · {t.arrival} arrival
+                  </span>
+                </span>
+                <CrowdBadge level={t.crowd} />
+              </button>
+            </li>
+          ))}
+        </ul>
 
         <p className="mt-3 text-[12px] leading-[17px] text-[#616161]">
           Crowd reports are community estimates. Always check station announcements.
@@ -265,28 +145,191 @@ export function Home() {
   )
 }
 
-function trainList(navigate: (p: string) => void, withCrowd: boolean) {
+/* =====================================================================
+ * State screens — amber system (S05a / S05b / S05c / S05_Location_Off)
+ * ===================================================================== */
+
+function HomeState({
+  mode,
+  onOpenSetup,
+  onOpenSmart,
+  onOpenTrain,
+}: {
+  mode: Mode
+  onOpenSetup: () => void
+  onOpenSmart: () => void
+  onOpenTrain: (id: string) => void
+}) {
+  /* ---------------- empty (S05b) ---------------- */
+  if (mode === 'empty') {
+    return (
+      <AmberShell>
+        <AmberHomeHeader />
+        <div className="px-4 pb-4">
+          <AmberBox className="flex items-center justify-center px-6 py-8">
+            <TrainIllustration />
+          </AmberBox>
+          <h1 className="mt-6 font-display text-[34px] leading-none tracking-wide">
+            SET YOUR ROUTE TO SEE TRAINS
+          </h1>
+          <div className="mt-6">
+            <SplitButton onClick={onOpenSetup} ariaLabel="Add route">
+              ADD ROUTE
+            </SplitButton>
+          </div>
+        </div>
+      </AmberShell>
+    )
+  }
+
+  /* ---------------- loading / offline / location-off share the shell ---- */
+  const offline = mode === 'offline'
+  const loading = mode === 'loading'
+  const locationOff = mode === 'location-off'
+
   return (
-    <ul className="space-y-3">
-      {TRAINS.slice(0, 3).map(t => (
-        <li key={t.id}>
+    <AmberShell>
+      <AmberHomeHeader />
+
+      <div className="px-4 pb-3">
+        {offline ? (
+          <div className="pt-1">
+            <OfflineBanner />
+            <LastKnownLabel />
+          </div>
+        ) : null}
+
+        {/* yellow route card */}
+        <AmberBox tone="amber" className="mt-3 px-5 py-5">
+          <p className="font-display text-[30px] leading-none tracking-wide">
+            {AMBER_ROUTE.from} TO {AMBER_ROUTE.to}
+          </p>
+          <p className="mt-4 text-[18px] leading-[24px]">
+            {AMBER_ROUTE.line} · Usual {AMBER_ROUTE.usual}
+          </p>
           <button
             type="button"
-            onClick={() => navigate(`/train/${t.id}`)}
-            className="flex w-full items-center justify-between rounded-[8px] border border-[#DDDDDD] bg-white px-4 py-4 text-left transition-colors hover:bg-[#FAFAFA]"
+            onClick={onOpenSetup}
+            className="mt-5 font-display text-[20px] tracking-wide underline underline-offset-4"
           >
-            <span>
-              <span className="block text-[18px] leading-[23px] font-semibold">
-                {t.departure} · in {t.inMinutes} min
-              </span>
-              <span className="mt-1 block text-[12px] leading-[15px] text-[#616161]">
-                {t.platform} · {t.arrival} arrival
-              </span>
-            </span>
-            {withCrowd ? <CrowdBadge level={t.crowd} /> : null}
+            CHANGE
           </button>
-        </li>
-      ))}
-    </ul>
+
+          {locationOff ? (
+            <div className="mt-5 flex items-center gap-5">
+              <span className="border-[3px] bg-white px-5 py-2.5 font-display text-[18px] tracking-wide" style={{ borderColor: '#111111' }}>
+                LOCATION OFF
+              </span>
+              <button
+                type="button"
+                onClick={onOpenSetup}
+                className="font-display text-[20px] tracking-wide underline underline-offset-4"
+              >
+                TURN ON
+              </button>
+            </div>
+          ) : null}
+        </AmberBox>
+
+        {/* smart suggestion card */}
+        <AmberBox className="mt-7 px-4 py-4">
+          <div className="flex items-center gap-3">
+            <svg width="34" height="26" viewBox="0 0 34 26" fill="none" stroke="#111111" strokeWidth="2.4" aria-hidden>
+              <path d="M4 6h10a4 4 0 0 1 0 8h6a4 4 0 0 0 0 8h4" />
+              <circle cx="4.5" cy="5.5" r="3" />
+              <circle cx="29" cy="21.5" r="3" />
+            </svg>
+            <h2 className="font-display text-[27px] leading-none tracking-wide">LEAVE 15 MIN EARLIER</h2>
+          </div>
+          <p className="mt-3 text-[17px] leading-[23px]">Estimated crowd drops from HIGH to MEDIUM.</p>
+
+          <div className="mt-4 flex items-center gap-4">
+            <div>
+              <AmberCrowdBadge level="high" />
+              {offline ? <p className="mt-1.5 text-[13px] tracking-wide text-[#6E6A62] uppercase">Last known</p> : null}
+            </div>
+            <span aria-hidden className="text-[26px]">→</span>
+            <div>
+              <AmberCrowdBadge level="medium" />
+              {offline ? <p className="mt-1.5 text-[13px] tracking-wide text-[#6E6A62] uppercase">Last known</p> : null}
+            </div>
+          </div>
+
+          <div className="mt-5">
+            <SplitButton disabled={offline} onClick={onOpenSmart}>
+              SEE OPTIONS
+            </SplitButton>
+          </div>
+        </AmberBox>
+
+        {/* next trains */}
+        <div className="mt-7 flex items-end justify-between">
+          <h2 className="font-display text-[32px] leading-none tracking-wide">NEXT TRAINS</h2>
+          <button
+            type="button"
+            disabled={offline}
+            onClick={onOpenSmart}
+            className={`font-display text-[20px] tracking-wide underline underline-offset-4 ${
+              offline ? 'cursor-not-allowed text-[#A8A196] no-underline' : ''
+            }`}
+          >
+            VIEW ALL
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="mt-5 space-y-4" aria-busy="true">
+            <span className="sr-only">Loading next trains…</span>
+            <Skeleton className="h-[92px]" />
+            <Skeleton className="h-[92px]" />
+          </div>
+        ) : (
+          <ul className="mt-4 space-y-3">
+            {(offline || locationOff
+              ? [TRAINS[1], TRAINS[2]]
+              : TRAINS.slice(0, 3)
+            ).map(t => (
+              <li key={t.id}>
+                <button
+                  type="button"
+                  onClick={() => onOpenTrain(t.id)}
+                  className="flex w-full items-center justify-between border-[3px] bg-white px-4 py-3.5 text-left"
+                  style={{ borderColor: '#111111' }}
+                >
+                  <span className="flex items-center gap-4">
+                    <span>
+                      <span className="block font-display text-[30px] leading-none">{t.departure}</span>
+                      <span className="mt-1 block text-[13px] tracking-wide uppercase">{t.type}</span>
+                    </span>
+                    <span className="text-[16px] leading-[22px]">
+                      {t.platform}
+                      <br />
+                      Arrives in {t.inMinutes - 2} min
+                    </span>
+                  </span>
+                  <AmberCrowdBadge level={t.crowd} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </AmberShell>
+  )
+}
+
+function TrainIllustration() {
+  return (
+    <svg width="220" height="200" viewBox="0 0 220 200" aria-hidden>
+      <rect x="60" y="24" width="100" height="14" fill="#111111" />
+      <rect x="46" y="38" width="128" height="112" fill="#F9B800" stroke="#111111" strokeWidth="4" />
+      <rect x="66" y="58" width="42" height="44" fill="white" stroke="#111111" strokeWidth="4" />
+      <rect x="112" y="58" width="42" height="44" fill="white" stroke="#111111" strokeWidth="4" />
+      <circle cx="80" cy="122" r="8" fill="white" stroke="#111111" strokeWidth="4" />
+      <circle cx="140" cy="122" r="8" fill="white" stroke="#111111" strokeWidth="4" />
+      <rect x="66" y="138" width="88" height="7" fill="#111111" />
+      <rect x="52" y="164" width="46" height="6" fill="#111111" />
+      <rect x="122" y="164" width="46" height="6" fill="#111111" />
+    </svg>
   )
 }

@@ -7,6 +7,13 @@ import { CrowdBadge, CrowdBar } from '../components/CrowdBadge'
 import { useStore } from '../lib/store'
 import { COMPARTMENT_CROWD, COMPARTMENT_META, TRAINS } from '../lib/mockData'
 import type { CrowdLevel } from '../lib/types'
+import {
+  AmberCrowdBadge,
+  AmberShell,
+  OfflineBanner,
+  Skeleton,
+  SplitButton,
+} from '../components/amber'
 
 /**
  * S06 — train detail with compartment crowd + anonymous crowd reporting.
@@ -20,6 +27,86 @@ const COMPARTMENTS: { key: keyof typeof COMPARTMENT_CROWD; label: string }[] = [
 ]
 
 const LEVELS: CrowdLevel[] = ['low', 'medium', 'high']
+
+/* ---------------- amber helpers (S06a / S06b) ---------------- */
+
+function SummaryBox({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div
+      className={`border-[3px] bg-white shadow-[6px_6px_0_0_#111111] ${className}`}
+      style={{ borderColor: '#111111' }}
+    >
+      <div className="grid grid-cols-3">{children}</div>
+    </div>
+  )
+}
+
+function SummaryCell({
+  label,
+  children,
+  border = false,
+}: {
+  label: string
+  children: React.ReactNode
+  border?: boolean
+}) {
+  return (
+    <div className={`px-3 py-4 ${border ? 'border-l-[3px] border-[#111111]' : ''}`}>
+      <p className="font-display text-[18px] tracking-wide">{label}</p>
+      <div className="mt-2 flex items-center">{children}</div>
+    </div>
+  )
+}
+
+function Legend({ color, label }: { color: string; label: string }) {
+  return (
+    <span className="flex items-center gap-2 font-display text-[19px] tracking-wide">
+      <span aria-hidden className="h-5 w-5 border-2 border-[#111111]" style={{ background: color }} />
+      {label}
+    </span>
+  )
+}
+
+/** 12-coach crowd chart from the amber design (illustrative). */
+const COACH_LEVELS: CrowdLevel[] = [
+  'high', 'medium', 'low', 'medium', 'high', 'medium',
+  'low', 'high', 'medium', 'high', 'low', 'medium',
+]
+const COACH_FILL: Record<CrowdLevel, string> = { low: '35%', medium: '72%', high: '100%' }
+const COACH_COLOR: Record<CrowdLevel, string> = { low: '#3BA55D', medium: '#F9B800', high: '#E5484D' }
+const COACH_MARK: Record<number, string> = { 2: 'F', 4: 'L' }
+
+function CoachChart() {
+  return (
+    <div
+      className="mt-4 border-[3px] bg-white px-3 pt-6 pb-5 shadow-[6px_6px_0_0_#111111]"
+      style={{ borderColor: '#111111' }}
+    >
+      <div className="flex items-end justify-between gap-1.5">
+        {COACH_LEVELS.map((lvl, i) => (
+          <div key={i} className="flex flex-1 flex-col items-center">
+            <span aria-hidden className="mb-1 h-4 font-display text-[16px] leading-none">
+              {COACH_MARK[i + 1] ?? ''}
+            </span>
+            <div className="relative h-[86px] w-full border-2 border-[#9A9A9A] bg-white">
+              <div
+                className="absolute inset-x-0 bottom-0"
+                style={{ height: COACH_FILL[lvl], background: COACH_COLOR[lvl] }}
+              />
+            </div>
+            <span className="mt-1.5 text-[15px] leading-none text-[#8A8A8A]">{i + 1}</span>
+          </div>
+        ))}
+      </div>
+      <div className="mt-5 flex items-center gap-6">
+        <Legend color="#3BA55D" label="LOW" />
+        <Legend color="#F9B800" label="MEDIUM" />
+        <Legend color="#E5484D" label="HIGH" />
+      </div>
+      <p className="mt-4 text-[17px] leading-[23px]">L = Ladies, F = First class</p>
+    </div>
+  )
+}
 
 export function TrainDetail() {
   const navigate = useNavigate()
@@ -44,47 +131,102 @@ export function TrainDetail() {
     setTimeout(() => setToast(null), 2400)
   }
 
-  /* ---------------- loading (S06a) ---------------- */
+  const screenTitle = `${train.departure} ${train.type.toUpperCase()}`
+
+  /* ---------------- loading (S06a) — amber system ---------------- */
   if (mode === 'loading') {
     return (
-      <DeviceFrame>
-        <ScreenHeader title="" onBack={() => navigate('/home')} />
-        <Content className="flex flex-col" aria-busy="true">
+      <AmberShell nav={false} back={() => navigate('/home')} title={screenTitle}>
+        <div className="pt-1" aria-busy="true">
           <span className="sr-only">Loading train details…</span>
-          <div className="h-7 w-2/3 animate-pulse rounded bg-[#F2F2F2]" />
-          <div className="mt-3 h-4 w-1/2 animate-pulse rounded bg-[#F2F2F2]" />
-          <div className="mt-6 h-28 animate-pulse rounded-[8px] border border-[#DDDDDD] bg-[#F2F2F2]" />
-          <div className="mt-5 space-y-3">
+
+          <SummaryBox>
+            <SummaryCell label="PLATFORM">
+              <Skeleton className="h-10 w-12" />
+            </SummaryCell>
+            <SummaryCell label="ARRIVES" border>
+              <Skeleton className="h-10 w-24" />
+            </SummaryCell>
+            <SummaryCell label="OVERALL" border>
+              <AmberCrowdBadge level="high" />
+            </SummaryCell>
+          </SummaryBox>
+
+          <h2 className="mt-6 font-display text-[36px] leading-none tracking-wide">COACH CROWD</h2>
+
+          <div className="mt-4 border-[3px] bg-white px-4 pt-6 pb-5 shadow-[6px_6px_0_0_#111111]" style={{ borderColor: '#111111' }}>
+            <Skeleton className="h-[86px] w-full" />
+            <div className="mt-5 flex items-center gap-6">
+              <Legend color="#3BA55D" label="LOW" />
+              <Legend color="#F9B800" label="MEDIUM" />
+              <Legend color="#E5484D" label="HIGH" />
+            </div>
+            <p className="mt-4 text-[17px] leading-[23px]">L = Ladies, F = First class</p>
+          </div>
+
+          <div className="mt-5 border-[3px] bg-white p-4 shadow-[6px_6px_0_0_#111111]" style={{ borderColor: '#111111' }}>
+            <Skeleton className="h-[104px] w-full" />
+          </div>
+
+          <h3 className="mt-6 font-display text-[24px] tracking-wide">HOW CROWDED IS YOUR COACH?</h3>
+          <div className="mt-3 grid grid-cols-3 gap-3">
             {[0, 1, 2].map(i => (
-              <div key={i} className="h-16 animate-pulse rounded-[8px] bg-[#F2F2F2]" />
+              <Skeleton key={i} className="h-[78px]" />
             ))}
           </div>
-        </Content>
-      </DeviceFrame>
+
+          <div className="mt-auto pt-6">
+            <SplitButton disabled>BOOK BOARDING SLOT</SplitButton>
+          </div>
+          <p className="mt-4 mb-2 text-center text-[16px] leading-[22px]">
+            Slots are advisory and help spread platform crowding.
+          </p>
+        </div>
+      </AmberShell>
     )
   }
 
-  /* ---------------- offline (S06b) ---------------- */
+  /* ---------------- offline (S06b) — amber system ---------------- */
   if (mode === 'offline') {
     return (
-      <DeviceFrame>
-        <ScreenHeader title="" onBack={() => navigate('/home')} />
-        <Content className="flex flex-col">
-          <div role="status" className="rounded-[8px] border border-[#202020] bg-[#F2F2F2] px-4 py-3 text-[14px]">
-            <strong className="font-semibold">You’re offline.</strong> Crowd reports can’t refresh
-            right now.
+      <AmberShell nav={false} back={() => navigate('/home')} title={screenTitle}>
+        <div className="pt-1">
+          <OfflineBanner />
+          <p className="mt-6 font-display text-[18px] tracking-[0.06em] text-[#6E6A62] uppercase">
+            Last known crowd levels
+          </p>
+
+          <SummaryBox className="mt-4">
+            <SummaryCell label="PLATFORM">
+              <span className="font-display text-[40px] leading-none">{train.platform.replace('Platform ', '')}</span>
+            </SummaryCell>
+            <SummaryCell label="ARRIVES" border>
+              <span className="font-display text-[40px] leading-none">{train.inMinutes} MIN</span>
+            </SummaryCell>
+            <SummaryCell label="OVERALL" border>
+              <AmberCrowdBadge level={train.crowd} />
+            </SummaryCell>
+          </SummaryBox>
+
+          <h2 className="mt-6 font-display text-[36px] leading-none tracking-wide">COACH CROWD</h2>
+          <CoachChart />
+
+          <div className="mt-5 border-[3px] bg-white px-4 py-4 shadow-[6px_6px_0_0_#111111]" style={{ borderColor: '#111111' }}>
+            <div className="flex items-center justify-between gap-3">
+              <p className="font-display text-[26px] tracking-wide">COACH 4 · LADIES</p>
+              <AmberCrowdBadge level="medium" />
+            </div>
+            <p className="mt-3 text-[17px] leading-[23px]">Updated 2 min ago · 14 reports</p>
           </div>
-          <h1 className="mt-4 text-[24px] font-semibold">{train.departure} to {state.toStation}</h1>
-          <div className="mt-4 rounded-[8px] border border-[#DDDDDD] px-4 py-4 text-[14px] leading-[20px] text-[#616161]">
-            Last known crowd data was saved at 08:12. It may no longer be accurate.
+
+          <div className="mt-auto pt-6">
+            <SplitButton disabled>BOOK BOARDING SLOT</SplitButton>
           </div>
-          <div className="mt-4">
-            <Button variant="secondary" onClick={() => navigate('/home')}>
-              Back to home
-            </Button>
-          </div>
-        </Content>
-      </DeviceFrame>
+          <p className="mt-4 mb-2 text-center text-[16px] leading-[22px]">
+            Slots are advisory and help spread platform crowding.
+          </p>
+        </div>
+      </AmberShell>
     )
   }
 

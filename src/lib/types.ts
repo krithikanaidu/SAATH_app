@@ -93,6 +93,8 @@ export interface AppState {
   travelAs: TravelAs
   points: number
   joinedGroupIds: string[]
+  /** groups the user created in-app (mock backend) */
+  customGroups: BuddyGroup[]
   crowdReports: CrowdReport[]
   /** which departure the user picked on Smart Window */
   chosenDeparture: string

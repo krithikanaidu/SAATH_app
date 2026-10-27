@@ -1,9 +1,12 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { DeviceFrame, Content } from '../components/DeviceFrame'
 import { Button } from '../components/Button'
 import { ScreenHeader } from '../components/ScreenHeader'
 import { useStore } from '../lib/store'
 import { RECENT_TRIPS } from '../lib/mockData'
+import { AmberShell, SplitButton } from '../components/amber'
+import type { Language } from '../lib/types'
 
 /**
  * S12 — rewards + trip summary.
@@ -14,32 +17,62 @@ export function Rewards() {
   const navigate = useNavigate()
   const { state } = useStore()
   const empty = new URLSearchParams(location.search).get('state') === 'empty'
+  const [settings, setSettings] = useState(false)
 
-  /* ---------------- empty (S12a) ---------------- */
+  /* ---------------- empty (S12a) — amber system ---------------- */
   if (empty) {
     return (
-      <DeviceFrame>
-        <ScreenHeader title="" onBack={() => navigate('/home')} />
-        <Content className="flex flex-col">
-          <h1 className="text-[24px] font-semibold">Your trip, wrapped up</h1>
-          <p className="mt-2 text-[14px] text-[#616161]">
-            Illustrative trip history &amp; non-cash points
+      <>
+        <AmberShell
+          title="MY RIDES"
+          right={
+            <button
+              type="button"
+              aria-label="Settings"
+              onClick={() => setSettings(true)}
+              className="flex h-[54px] w-[54px] items-center justify-center border-[3px] bg-white"
+              style={{ borderColor: '#111111' }}
+            >
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#111111" strokeWidth="1.8" strokeLinejoin="round" aria-hidden>
+                <path d="M19.1 13.2a7.4 7.4 0 0 0 0-2.4l1.9-1.5-1.9-3.3-2.3 1a7.4 7.4 0 0 0-2-1.2L14.5 3h-3.8l-.3 2.8a7.4 7.4 0 0 0-2 1.2l-2.3-1L4.1 9.3 6 10.8a7.4 7.4 0 0 0 0 2.4l-1.9 1.5 1.9 3.3 2.3-1c.6.5 1.3.9 2 1.2l.3 2.8h3.8l.3-2.8a7.4 7.4 0 0 0 2-1.2l2.3 1 1.9-3.3-1.9-1.5z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            </button>
+          }
+        >
+          {/* points card */}
+          <div
+            className="mt-2 border-[3px] bg-[#F9B800] px-5 py-5 shadow-[6px_6px_0_0_#111111]"
+            style={{ borderColor: '#111111' }}
+          >
+            <p className="font-display text-[20px] tracking-[0.04em]">YOUR POINTS</p>
+            <p className="mt-1 font-display text-[64px] leading-none">0</p>
+            <div className="mt-4 h-6 border-[3px] bg-white" style={{ borderColor: '#111111' }}>
+              <div className="h-full w-0" />
+            </div>
+            <p className="mt-3 font-display text-[18px] tracking-[0.04em]">300 TO NEXT REWARD</p>
+          </div>
+
+          <h2 className="mt-7 font-display text-[32px] leading-none tracking-wide">NO TRIPS YET</h2>
+          <p className="mt-3 font-display text-[22px] leading-[28px] tracking-wide">
+            YOUR FIRST OFF-PEAK TRIP EARNS 30 POINTS.
           </p>
 
-          <div className="mt-8 flex flex-col items-center rounded-[8px] border border-[#DDDDDD] px-5 py-10 text-center">
-            <span aria-hidden className="text-[40px]">
-              🎁
-            </span>
-            <h2 className="mt-3 text-[18px] font-semibold">No trips yet</h2>
-            <p className="mt-2 text-[14px] leading-[20px] text-[#616161]">
-              Complete a journey and your Saath points will show up here.
-            </p>
-            <div className="mt-5 w-full">
-              <Button onClick={() => navigate('/home')}>Plan a trip</Button>
-            </div>
+          <div className="mt-6">
+            <SplitButton disabled>REDEEM POINTS</SplitButton>
           </div>
-        </Content>
-      </DeviceFrame>
+
+          <button
+            type="button"
+            onClick={() => navigate('/profile')}
+            className="mt-5 self-start font-display text-[22px] tracking-wide underline underline-offset-4"
+          >
+            VIEW TRIP HISTORY
+          </button>
+
+          {settings ? <SettingsSheet onClose={() => setSettings(false)} /> : null}
+        </AmberShell>
+      </>
     )
   }
 
@@ -105,5 +138,111 @@ export function Rewards() {
         </div>
       </Content>
     </DeviceFrame>
+  )
+}
+
+/* ---------------- amber settings sheet (gear on S12a) ---------------- */
+
+const LANGUAGE_OPTIONS: { id: Language; label: string }[] = [
+  { id: 'en', label: 'English' },
+  { id: 'hi', label: 'हिन्दी' },
+  { id: 'mr', label: 'मराठी' },
+]
+
+/**
+ * Compact settings sheet behind the gear on S12a. It only touches state the app
+ * already keeps (language, large text) plus a full reset of the mock backend.
+ */
+function SettingsSheet({ onClose }: { onClose: () => void }) {
+  const { state, update, reset } = useStore()
+
+  return (
+    <div
+      className="absolute inset-0 z-30 flex items-end bg-black/40 px-4 pb-6"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Settings"
+      onClick={e => {
+        if (e.target === e.currentTarget) onClose()
+      }}
+    >
+      <div
+        className="w-full border-[3px] bg-[#FAF8F4] p-5 shadow-[6px_6px_0_0_#111111]"
+        style={{ borderColor: '#111111' }}
+      >
+        <div className="flex items-center justify-between">
+          <h2 className="font-display text-[30px] leading-none tracking-wide">SETTINGS</h2>
+          <button
+            type="button"
+            aria-label="Close settings"
+            onClick={onClose}
+            className="flex h-10 w-10 items-center justify-center border-[3px] bg-white text-[20px] leading-none"
+            style={{ borderColor: '#111111' }}
+          >
+            ×
+          </button>
+        </div>
+
+        <fieldset className="mt-5">
+          <legend className="font-display text-[18px] tracking-wide">LANGUAGE</legend>
+          <div className="mt-2 flex border-[3px]" style={{ borderColor: '#111111' }}>
+            {LANGUAGE_OPTIONS.map((l, i) => {
+              const active = state.language === l.id
+              return (
+                <button
+                  key={l.id}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => update({ language: l.id })}
+                  className={`flex-1 px-2 py-3 text-[15px] ${i > 0 ? 'border-l-[3px] border-[#111111]' : ''} ${
+                    active ? 'bg-[#F9B800] font-bold' : 'bg-white text-[#5A5750]'
+                  }`}
+                >
+                  {l.label}
+                </button>
+              )
+            })}
+          </div>
+        </fieldset>
+
+        <div className="mt-5 flex items-center justify-between">
+          <span className="font-display text-[18px] tracking-wide">LARGE TEXT</span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={state.largeText}
+            onClick={() => update({ largeText: !state.largeText })}
+            className={`flex h-9 w-16 items-center border-[3px] px-1 ${state.largeText ? 'bg-[#F9B800]' : 'bg-white'}`}
+            style={{ borderColor: '#111111' }}
+          >
+            <span
+              aria-hidden
+              className={`h-6 w-6 border-2 border-[#111111] bg-white transition-transform ${
+                state.largeText ? 'translate-x-7' : ''
+              }`}
+            />
+          </button>
+        </div>
+
+        <p className="mt-4 text-[14px] leading-[19px] text-[#5A5750]">
+          Language and size are stored on this device only. Resetting clears your trips, groups and
+          sign-in.
+        </p>
+
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={() => {
+              reset()
+              onClose()
+              window.location.assign('/')
+            }}
+            className="w-full border-[3px] border-[#111111] bg-white px-4 py-3.5 font-display text-[20px] tracking-wide"
+          >
+            RESET APP
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }

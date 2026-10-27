@@ -21,6 +21,7 @@ const DEFAULT_STATE: AppState = {
   travelAs: null,
   points: 140,
   joinedGroupIds: ['western-morning-buddies'],
+  customGroups: [],
   crowdReports: [],
   chosenDeparture: '08:30',
   slotBooked: false,

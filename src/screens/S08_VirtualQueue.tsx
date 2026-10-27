@@ -4,7 +4,8 @@ import { DeviceFrame, Content } from '../components/DeviceFrame'
 import { Button } from '../components/Button'
 import { ScreenHeader } from '../components/ScreenHeader'
 import { useStore } from '../lib/store'
-import { BOARDING_SLOTS, SLOT_CONFIRMATION, ZONES } from '../lib/mockData'
+import { BOARDING_SLOTS, SLOT_CONFIRMATION, TRAINS, ZONES } from '../lib/mockData'
+import { AmberShell, OfflineBanner, SplitButton } from '../components/amber'
 
 /**
  * S08 — Virtual Queue.
@@ -31,31 +32,55 @@ export function VirtualQueue() {
 
   const mmss = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
 
-  /* ---------------- offline (S08c) ---------------- */
+  /* ---------------- offline (S08c) — amber system ---------------- */
   if (offline) {
     return (
-      <DeviceFrame>
-        <ScreenHeader title="" onBack={() => navigate('/train/t-0830')} />
-        <Content className="flex flex-col">
-          <h1 className="text-[24px] font-semibold">Virtual Queue</h1>
-          <div role="status" className="mt-4 rounded-[8px] border border-[#202020] bg-[#F2F2F2] px-4 py-3 text-[14px] leading-[20px]">
-            <strong className="font-semibold">You’re offline.</strong> Boarding slots can’t be
-            booked without a connection.
-          </div>
-          <p className="mt-4 text-[14px] leading-[20px] text-[#616161]">
-            Reconnect to choose a slot. Your journey details are still available below.
+      <AmberShell nav={false} back={() => navigate(-1)} title="BOARDING SLOT">
+        <div className="pt-1">
+          <OfflineBanner />
+          <p className="mt-6 font-display text-[18px] tracking-[0.06em] text-[#6E6A62] uppercase">
+            Last known crowd levels
           </p>
-          <div className="mt-4 rounded-[8px] border border-[#DDDDDD] px-4 py-4 text-[14px]">
-            <strong>08:30 · {state.fromStation} → {state.toStation}</strong>
-            <span className="mt-1 block text-[#616161]">Platform 3 · Ladies compartment</span>
+
+          <p className="mt-4 font-display text-[28px] leading-none tracking-wide">
+            {TRAINS[0].departure} {TRAINS[0].type.toUpperCase()} · {TRAINS[0].platform.toUpperCase()}
+          </p>
+
+          <p className="mt-5 font-display text-[20px] tracking-[0.04em]">CHOOSE A SLOT</p>
+          <div className="mt-3 grid grid-cols-2 gap-3">
+            {BOARDING_SLOTS.map(s => (
+              <div
+                key={s.id}
+                className="flex cursor-not-allowed items-center justify-between border-[3px] border-[#111111] bg-[#E4DED0] px-3 py-3.5"
+                aria-disabled="true"
+              >
+                <span className="font-display text-[24px] leading-none text-[#A8A196]">
+                  {s.label.split(' · ')[0]}
+                </span>
+                <DisabledPeople />
+              </div>
+            ))}
           </div>
-          <div className="mt-4">
-            <Button variant="secondary" onClick={() => navigate(-1)}>
-              Go back
-            </Button>
+
+          <PlatformMap />
+
+          <div className="mt-4 flex items-start gap-3">
+            <span
+              aria-hidden
+              className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center border-2 border-[#111111] bg-white text-[14px] font-bold"
+            >
+              i
+            </span>
+            <p className="text-[16px] leading-[22px]">
+              Advisory slot. Boarding is not blocked if you miss it.
+            </p>
           </div>
-        </Content>
-      </DeviceFrame>
+
+          <div className="mt-auto pt-6">
+            <SplitButton disabled>CONFIRM SLOT</SplitButton>
+          </div>
+        </div>
+      </AmberShell>
     )
   }
 
@@ -235,5 +260,77 @@ export function VirtualQueue() {
         </div>
       </Content>
     </DeviceFrame>
+  )
+}
+
+/* ---------------- amber helpers (S08c) ---------------- */
+
+/** muted three-person glyph shown inside the disabled offline slots */
+function DisabledPeople() {
+  return (
+    <svg width="30" height="14" viewBox="0 0 34 14" fill="none" stroke="#A8A196" strokeWidth="1.6" aria-hidden>
+      <circle cx="7" cy="3.2" r="2.2" />
+      <path d="M3.4 12.5V8.2c0-1.5 1.6-2.6 3.6-2.6s3.6 1.1 3.6 2.6v4.3" />
+      <circle cx="17" cy="3.2" r="2.2" />
+      <path d="M13.4 12.5V8.2c0-1.5 1.6-2.6 3.6-2.6s3.6 1.1 3.6 2.6v4.3" />
+      <circle cx="27" cy="3.2" r="2.2" />
+      <path d="M23.4 12.5V8.2c0-1.5 1.6-2.6 3.6-2.6s3.6 1.1 3.6 2.6v4.3" />
+    </svg>
+  )
+}
+
+/** platform map with the highlighted coach zone (S08c illustration) */
+function PlatformMap() {
+  const COACHES = 12
+  const HIGHLIGHT = 4
+  return (
+    <div
+      className="mt-5 border-[3px] bg-white px-4 pt-8 pb-4 shadow-[6px_6px_0_0_#111111]"
+      style={{ borderColor: '#111111' }}
+    >
+      <div className="relative">
+        <span
+          aria-hidden
+          className="absolute -top-7 -translate-x-1/2"
+          style={{ left: `${((HIGHLIGHT - 0.5) / COACHES) * 100}%` }}
+        >
+          <svg width="26" height="32" viewBox="0 0 26 32">
+            <path
+              d="M13 1c6.1 0 11 4.9 11 11 0 7.8-11 19-11 19S2 19.8 2 12C2 5.9 6.9 1 13 1z"
+              fill="#F9B800"
+              stroke="#111111"
+              strokeWidth="2.5"
+            />
+            <circle cx="13" cy="12" r="4" fill="#FAF8F4" stroke="#111111" strokeWidth="2" />
+          </svg>
+        </span>
+
+        <div className="flex gap-1">
+          {Array.from({ length: COACHES }, (_, i) => (
+            <div
+              key={i}
+              className={`h-12 flex-1 border-2 border-[#111111] ${
+                i === HIGHLIGHT - 1 ? 'bg-[#F9B800]' : 'bg-white'
+              }`}
+            />
+          ))}
+        </div>
+        <div className="mt-1.5 flex gap-1">
+          {Array.from({ length: COACHES }, (_, i) => (
+            <span key={i} className="flex-1 text-center text-[13px] leading-none text-[#8A8A8A]">
+              {i + 1}
+            </span>
+          ))}
+        </div>
+        <div className="mt-2 flex gap-1">
+          {Array.from({ length: COACHES }, (_, i) => (
+            <div key={i} className={`h-[6px] flex-1 ${i === HIGHLIGHT - 1 ? 'bg-[#111111]' : ''}`} />
+          ))}
+        </div>
+      </div>
+      <p className="mt-4 text-center font-display text-[22px] tracking-wide">
+        BOARD HERE · COACH {HIGHLIGHT} ZONE
+      </p>
+    </div>
   )
 }

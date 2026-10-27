@@ -5,6 +5,7 @@ import { Button } from '../components/Button'
 import { ScreenHeader } from '../components/ScreenHeader'
 import { Field, TextInput } from '../components/forms'
 import { useStore } from '../lib/store'
+import { SplitButton } from '../components/amber'
 
 /**
  * S03 — phone sign-in.
@@ -21,10 +22,18 @@ export function SignUp() {
   const { state, update } = useStore()
 
   const [step, setStep] = useState<'phone' | 'verify' | 'location'>('phone')
-  const [phone, setPhone] = useState(state.phone || '98765 43210')
+  const [phone, setPhone] = useState(() => {
+    const forced = new URLSearchParams(window.location.search).get('state')
+    return forced === 'error' ? '98765 4321' : state.phone || '98765 43210'
+  })
   const [otp, setOtp] = useState('')
   const [otp4, setOtp4] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(() =>
+    new URLSearchParams(window.location.search).get('state') === 'error'
+      ? 'Enter a 10-digit mobile number.'
+      : null,
+  )
+  const [showWhy, setShowWhy] = useState(false)
   const [sending, setSending] = useState(false)
   const [countdown, setCountdown] = useState(RESEND_SECONDS)
   const otpRefs = useRef<(HTMLInputElement | null)[]>([])
@@ -247,6 +256,109 @@ export function SignUp() {
           >
             NOT NOW
           </button>
+        </div>
+      </DeviceFrame>
+    )
+  }
+
+  /* ---------- amber phone step with validation error (S03a_Error) ---------- */
+  if (new URLSearchParams(location.search).get('state') === 'error') {
+    const digits = phone.replace(/\D/g, '')
+    const valid = digits.length === 10
+
+    return (
+      <DeviceFrame nav={false} theme="amber" statusVariant="amber">
+        <div className="flex min-h-0 flex-1 flex-col px-4 pt-1 pb-5">
+          <div className="flex items-start gap-3">
+            <button
+              type="button"
+              aria-label="Go back"
+              onClick={() => navigate('/onboarding')}
+              className="flex h-11 w-11 shrink-0 items-center justify-center border-2 border-[#111111] bg-white text-[22px] font-bold"
+            >
+              ←
+            </button>
+            {/* 3-dot stepper: step 1 active */}
+            <div className="mt-5 flex flex-1 items-center gap-2" aria-hidden>
+              <span className="h-3.5 w-3.5 rounded-full border-2 border-[#111111] bg-[#F9B800]" />
+              <span className="h-0.5 flex-1 bg-[#111111]" />
+              <span className="h-3.5 w-3.5 rounded-full border-2 border-[#111111] bg-white" />
+              <span className="h-0.5 flex-1 bg-[#111111]" />
+              <span className="h-3.5 w-3.5 rounded-full border-2 border-[#111111] bg-white" />
+            </div>
+          </div>
+
+          <h1 className="mt-4 font-display text-[40px] leading-[44px] tracking-wide uppercase">
+            Enter your phone number
+          </h1>
+          <p className="mt-2 text-[16px] text-[#5A5750]">We will send a 4-digit code.</p>
+
+          {/* phone field */}
+          <div className="mt-6">
+            <label htmlFor="phone-amber" className="font-display text-[18px] tracking-[0.04em]">
+              PHONE NUMBER
+            </label>
+            <div
+              className={`mt-2 flex items-stretch border-[3px] bg-white ${
+                valid ? 'border-[#111111]' : 'border-[#D92D20]'
+              }`}
+            >
+              <span className="flex items-center gap-1 border-r-[3px] border-[#111111] px-4 font-display text-[24px] tracking-wide">
+                +91 <span aria-hidden className="text-[16px]">▾</span>
+              </span>
+              <input
+                id="phone-amber"
+                inputMode="tel"
+                maxLength={12}
+                value={phone}
+                onChange={e => {
+                  setPhone(e.target.value)
+                  if (error) setError(null)
+                }}
+                aria-invalid={!valid}
+                aria-describedby={valid ? undefined : 'phone-error'}
+                className="w-full bg-white px-4 py-4 font-display text-[28px] tracking-wide outline-none"
+              />
+            </div>
+
+            {valid ? null : (
+              <p id="phone-error" role="alert" className="mt-3 flex items-start gap-2 text-[17px] leading-[23px] text-[#D92D20]">
+                <span aria-hidden>⚠</span> {error ?? 'Enter a 10-digit mobile number.'}
+              </p>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setShowWhy(v => !v)}
+              aria-expanded={showWhy}
+              className="mt-5 font-display text-[20px] tracking-wide underline underline-offset-4"
+            >
+              WHY DO WE NEED THIS?
+            </button>
+            {showWhy ? (
+              <p className="mt-3 border-l-4 border-[#F9B800] pl-3 text-[16px] leading-[22px] text-[#5A5750]">
+                Your number is your login — there is no password to leak. It also lets a
+                phone-verified organiser reach you inside a Saath Group. We never show it to other
+                commuters.
+              </p>
+            ) : null}
+          </div>
+
+          <div className="flex-1" />
+
+          <SplitButton
+            disabled={!valid}
+            onClick={() => {
+              update({ phone, signedIn: true })
+              setStep('verify')
+            }}
+          >
+            SEND CODE
+          </SplitButton>
+
+          <p className="mt-4 mb-1 text-center text-[16px] leading-[22px] text-[#5A5750]">
+            <span aria-hidden>🔒</span> Your number is never shared with other commuters.
+          </p>
         </div>
       </DeviceFrame>
     )

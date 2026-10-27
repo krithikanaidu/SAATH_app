@@ -1,6 +1,7 @@
 node_modules
 dist
 dist-ssr
+tests/out
 *.local
 .DS_Store
 .env

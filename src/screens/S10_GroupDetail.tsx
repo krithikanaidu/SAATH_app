@@ -13,7 +13,9 @@ export function GroupDetail() {
   const { groupId } = useParams()
   const { state, update } = useStore()
 
-  const group = BUDDY_GROUPS.find(g => g.id === groupId) ?? BUDDY_GROUPS[0]
+  const group =
+    [...BUDDY_GROUPS, ...(state.customGroups ?? [])].find(g => g.id === groupId) ??
+    BUDDY_GROUPS[0]
   const joined = state.joinedGroupIds.includes(group.id)
 
   const [draft, setDraft] = useState('')

@@ -11,17 +11,20 @@ export function DeviceFrame({
   nav = true,
   statusVariant = 'mono',
   theme = 'mono',
+  bg,
 }: {
   children: ReactNode
   nav?: boolean
   statusVariant?: 'mono' | 'amber'
   theme?: 'mono' | 'amber'
+  /** overrides the theme background (S11b uses the danger-soft tint) */
+  bg?: string
 }) {
   return (
     <div
       className="device"
       data-theme={theme}
-      style={theme === 'amber' ? { background: '#FAF8F4' } : undefined}
+      style={{ background: bg ?? (theme === 'amber' ? '#FAF8F4' : undefined) }}
     >
       <div className="screen">
         <StatusBar variant={statusVariant} />

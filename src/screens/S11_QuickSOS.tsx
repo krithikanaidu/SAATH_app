@@ -4,6 +4,7 @@ import { DeviceFrame, Content } from '../components/DeviceFrame'
 import { ScreenHeader } from '../components/ScreenHeader'
 import { useStore } from '../lib/store'
 import { TRUSTED_CONTACTS } from '../lib/mockData'
+import { AmberShell } from '../components/amber'
 
 /**
  * S11 — Quick SOS.
@@ -96,37 +97,54 @@ export function QuickSOS() {
     navigate('/home')
   }
 
-  /* ---------------- countdown (S11b, amber) ---------------- */
+  /* ---------------- countdown (S11b, amber + danger-soft tint) ---------------- */
   if (phase === 'countdown') {
+    const pct = Math.max(0, (countdown / COUNTDOWN_SECONDS) * 100)
     return (
-      <DeviceFrame nav={false} theme="amber" statusVariant="amber">
-        <div className="flex min-h-0 flex-1 flex-col px-4 pt-1 pb-5">
-          <p className="mt-2 font-display text-[22px] tracking-wide uppercase">Safety</p>
-          <div className="mt-6 flex flex-col items-center">
-            <p className="font-display text-[72px] leading-none text-[#D92D20]">
-              {String(countdown).padStart(2, '0')}
-            </p>
-            <p className="mt-3 font-display text-[22px] tracking-wide uppercase">
-              Sending alert to 3 contacts
-            </p>
-          </div>
+      <AmberShell bg="#FFE9E6">
+        <p className="mt-2 font-display text-[40px] leading-none tracking-wide">SAFETY</p>
 
-          <div className="mt-6 rounded-[8px] border-2 border-[#D92D20] bg-[#FFE9E6] px-4 py-4 text-[15px] leading-[22px]">
-            Your trusted contacts will get your name, trip and (if enabled) your live location.
-            This is not an emergency dispatch — call 112 for help.
-          </div>
-
-          <div className="flex-1" />
-
-          <button
-            type="button"
-            onClick={cancelCountdown}
-            className="w-full border-2 border-[#111111] bg-white py-4 font-display text-[22px] tracking-wide uppercase"
+        <div className="mt-6 flex justify-center">
+          <div
+            className="flex h-[220px] w-[220px] items-center justify-center border-[3px] border-[#D92D20] bg-white shadow-[8px_8px_0_0_#111111]"
+            role="timer"
+            aria-live="assertive"
+            aria-label={`${countdown} seconds before the alert is sent`}
           >
-            Cancel
-          </button>
+            <span className="font-display text-[64px] leading-none text-[#D92D20]">
+              {String(countdown).padStart(2, '0')}
+            </span>
+          </div>
         </div>
-      </DeviceFrame>
+
+        <p className="mt-6 text-center font-display text-[28px] leading-none tracking-wide">
+          SENDING ALERT TO {TRUSTED_CONTACTS.length} CONTACTS
+        </p>
+
+        <div
+          className="mt-6 h-6 border-[3px] border-[#111111] bg-white"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(pct)}
+          aria-label="Time before the alert is sent"
+        >
+          <div
+            className="h-full bg-[#D92D20] transition-[width] duration-1000 ease-linear"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+
+        <div className="flex-1" />
+
+        <button
+          type="button"
+          onClick={cancelCountdown}
+          className="mb-2 w-full border-[3px] border-[#111111] bg-white py-5 font-display text-[30px] tracking-wide shadow-[6px_6px_0_0_#111111] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[3px_3px_0_0_#111111]"
+        >
+          CANCEL
+        </button>
+      </AmberShell>
     )
   }
 
