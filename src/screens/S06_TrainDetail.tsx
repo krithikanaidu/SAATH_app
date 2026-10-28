@@ -5,6 +5,7 @@ import { Button } from '../components/Button'
 import { ScreenHeader } from '../components/ScreenHeader'
 import { CrowdBadge, CrowdBar } from '../components/CrowdBadge'
 import { useStore } from '../lib/store'
+import { useCrowdReports } from '../lib/hooks'
 import { COMPARTMENT_CROWD, COMPARTMENT_META, TRAINS } from '../lib/mockData'
 import type { CrowdLevel } from '../lib/types'
 import {
@@ -112,6 +113,7 @@ export function TrainDetail() {
   const navigate = useNavigate()
   const { trainId } = useParams()
   const { state, update } = useStore()
+  const crowd = useCrowdReports(trainId ?? TRAINS[0].id)
   const train = TRAINS.find(t => t.id === trainId) ?? TRAINS[0]
 
   const mode = new URLSearchParams(location.search).get('state')
@@ -119,14 +121,15 @@ export function TrainDetail() {
   const [toast, setToast] = useState<string | null>(null)
 
   const submitReport = (level: CrowdLevel) => {
-    // Mock persistence — a real backend would POST an anonymous report here.
     setReported(level)
+    // local mirror so the UI responds instantly, then persist to the backend
     update({
       crowdReports: [
         ...state.crowdReports,
         { compartment: 'general', level, at: Date.now() },
       ],
     })
+    void crowd.report('general', level)
     setToast(`Reported ${level} crowd for General.`)
     setTimeout(() => setToast(null), 2400)
   }

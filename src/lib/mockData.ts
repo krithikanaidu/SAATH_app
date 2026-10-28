@@ -1,7 +1,4 @@
 import type {
-  BuddyGroup,
-  ChatMessage,
-  GroupMember,
   Train,
   TrustedContact,
   Trip,
@@ -77,63 +74,12 @@ export const COMPARTMENT_META = {
   reporters: 18,
 }
 
-export const BUDDY_GROUPS: BuddyGroup[] = [
-  {
-    id: 'western-morning-buddies',
-    name: 'Western morning buddies',
-    from: 'Borivali',
-    to: 'Churchgate',
-    window: '08:15–08:45',
-    members: 8,
-    line: 'Western',
-    verifiedOrganiser: true,
-    joined: true,
-  },
-  {
-    id: 'andheri-travel-circle',
-    name: 'Andheri travel circle',
-    from: 'Andheri',
-    to: 'Churchgate',
-    window: '08:30–09:00',
-    members: 6,
-    line: 'Western',
-    verifiedOrganiser: true,
-    joined: false,
-  },
-  {
-    id: 'central-senior-companions',
-    name: 'Central senior companions',
-    from: 'Thane',
-    to: 'CSMT',
-    window: '10:00–10:30',
-    members: 5,
-    line: 'Central',
-    verifiedOrganiser: true,
-    joined: false,
-  },
-]
-
-export const GROUP_MEMBERS: GroupMember[] = [
-  { id: 'm1', name: 'Priya', initial: 'P', role: 'Organiser' },
-  { id: 'm2', name: 'Neha', initial: 'N', role: 'Member' },
-  { id: 'm3', name: 'Asha', initial: 'A', role: 'You' },
-  { id: 'm4', name: 'Others', initial: '+5', role: 'Member' },
-]
-
-export const GROUP_CHAT: ChatMessage[] = [
-  {
-    id: 'c1',
-    author: 'Priya',
-    time: '08:19',
-    body: 'I’m near the stairs. See you at 08:22.',
-  },
-  {
-    id: 'c2',
-    author: 'Neha',
-    time: '08:20',
-    body: '— On my way.',
-  },
-]
+/**
+ * Buddy groups, members and chat are no longer hardcoded — they come from
+ * Supabase (or the local store when the backend is unreachable).
+ * See `src/lib/db.ts`, `src/lib/hooks.ts` and screens S09/S10.
+ * Seed groups in the database, or create them in-app with the "+".
+ */
 
 export const TRUSTED_CONTACTS: TrustedContact[] = [
   { id: 'tc1', name: 'Meera', relation: 'Sister', phone: '+91 98765 46210', last4: '4621' },
@@ -141,6 +87,7 @@ export const TRUSTED_CONTACTS: TrustedContact[] = [
   { id: 'tc3', name: 'Priya', relation: 'Friend', phone: '+91 97765 32100', last4: '2100' },
 ]
 
+/** Fallback trip history shown when the backend has no trips yet. */
 export const RECENT_TRIPS: Trip[] = [
   { id: 'tr1', when: 'Today · 08:42', from: 'Borivali', to: 'Churchgate', points: 20 },
   { id: 'tr2', when: 'Yesterday · 08:18', from: 'Borivali', to: 'Churchgate', points: 10 },
@@ -169,16 +116,119 @@ export const ZONES = ['A', 'B', 'C', 'D'] as const
 
 export const LINES = ['Western line', 'Central line', 'Harbour line']
 
+/**
+ * Station lists per line, ordered south → north (the direction most commuters
+ * travel into the city). Sourced from the Mumbai suburban network; the app
+ * treats them as illustrative and never claims live railway data.
+ */
 export const STATIONS: Record<string, string[]> = {
-  'Western line': ['Borivali', 'Andheri', 'Dadar', 'Bandra', 'Churchgate'],
-  'Central line': ['Thane', 'Kurla', 'Dadar', 'CSMT'],
-  'Harbour line': ['Andheri', 'Wadala', 'CSMT'],
+  'Western line': [
+    'Churchgate',
+    'Marine Lines',
+    'Charni Road',
+    'Grant Road',
+    'Mumbai Central',
+    'Dadar',
+    'Bandra',
+    'Khar Road',
+    'Santacruz',
+    'Vile Parle',
+    'Andheri',
+    'Jogeshwari',
+    'Goregaon',
+    'Malad',
+    'Kandivali',
+    'Borivali',
+    'Dahisar',
+    'Manda Road',
+    'Vasai Road',
+    'Nalasopara',
+    'Virar',
+    'Vangaon',
+    'Dahanu Road',
+  ],
+  'Central line': [
+    'CSMT',
+    'Byculla',
+    'Dadar',
+    'Kurla',
+    'Ghatkopar',
+    'Vikhroli',
+    'Bhandup',
+    'Nahur',
+    'Mulund',
+    'Thane',
+    'Kalva',
+    'Mumbra',
+    'Diva',
+    'Kopar',
+    'Dombivli',
+    'Thakurli',
+    'Kalyan',
+    'Titwala',
+    'Khadavli',
+    'Vasind',
+    'Asangaon',
+    'Atgaon',
+    'Khardi',
+    'Kasara',
+  ],
+  'Harbour line': [
+    'CSMT',
+    'Dock Yard Road',
+    'Chinchpokli',
+    'Currey Road',
+    'Parel',
+    'Sewri',
+    'Wadala Road',
+    'Kings Circle',
+    'Mahim Junction',
+    'Bandra',
+    'Khar Road',
+    'Santacruz',
+    'Vile Parle',
+    'Andheri',
+    'Jogeshwari',
+    'Goregaon',
+    'Chembur',
+    'Govandi',
+    'Mankhurd',
+    'Tilak Nagar',
+    'Kurla',
+    'Sion',
+    'Vashi',
+    'Sanpada',
+    'Juinagar',
+    'Nerul',
+    'Seawoods–Darave',
+    'CBD Belapur',
+    'Kharghar',
+    'Mansarovar',
+    'Khandeshwar',
+    'Panvel',
+  ],
 }
 
+/** Short display name — keeps the Harbour line's "Junction"/"Road" suffixes tidy. */
+export function shortStation(name: string): string {
+  return name
+    .replace(' Junction', '')
+    .replace(' Road', '')
+    .replace('–Darave', '')
+}
+
+/**
+ * Fallback departure presets shown on the setup step. The user can pick any
+ * time via the time input, so this is a convenience list, not a constraint.
+ */
 export const DEPARTURE_TIMES = [
-  '08:30 AM · Weekdays',
+  '06:30 AM · Weekdays',
+  '07:00 AM · Weekdays',
+  '07:30 AM · Weekdays',
   '08:00 AM · Weekdays',
+  '08:30 AM · Weekdays',
   '09:00 AM · Weekdays',
+  '09:30 AM · Weekdays',
   '18:30 PM · Weekdays',
 ]
 

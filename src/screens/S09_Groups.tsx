@@ -4,36 +4,49 @@ import { DeviceFrame, Content } from '../components/DeviceFrame'
 import { Button } from '../components/Button'
 import { ScreenHeader } from '../components/ScreenHeader'
 import { useStore } from '../lib/store'
-import { BUDDY_GROUPS } from '../lib/mockData'
+import { useGroups } from '../lib/hooks'
+import { STATIONS } from '../lib/mockData'
 import { AmberShell, SplitButton } from '../components/amber'
-import type { BuddyGroup } from '../lib/types'
+import { SyncBadge } from '../components/SyncBadge'
 
 /**
  * S09 — Saath Groups list.
+ *
+ * Groups are no longer hardcoded. They come from Supabase via `useGroups`
+ * (falling back to locally created groups when the backend is unreachable).
+ * Users can create a group with "+" and delete groups they organiser.
+ *
  *  ?state=empty → S09a
  */
 
-const LINES_FILTER = ['All lines', 'Western line', 'Central line']
+const LINES_FILTER = ['All lines', 'Western line', 'Central line', 'Harbour line']
 const TIME_FILTER = ['Morning', 'Afternoon', 'Evening']
 
 export function Groups() {
   const navigate = useNavigate()
-  const { state, update } = useStore()
   const empty = new URLSearchParams(location.search).get('state') === 'empty'
 
   const [line, setLine] = useState(LINES_FILTER[0])
   const [time, setTime] = useState(TIME_FILTER[0])
-  const [selected, setSelected] = useState('western-morning-buddies')
+  const [selected, setSelected] = useState<string | null>(null)
   const [creating, setCreating] = useState(false)
 
-  const allGroups = [...BUDDY_GROUPS, ...(state.customGroups ?? [])]
-  const groups = allGroups.filter(g => line === 'All lines' || g.line === line.replace(' line', ''))
+  // groups from the backend, with locally-created ones merged in
+  const groups = useGroups()
+  const allGroups = groups.data
+
+  const visible = allGroups.filter(
+    g => line === 'All lines' || g.line === line.replace(' line', ''),
+  )
 
   const join = (id: string) => {
-    const next = state.joinedGroupIds.includes(id)
-      ? state.joinedGroupIds.filter(x => x !== id)
-      : [...state.joinedGroupIds, id]
-    update({ joinedGroupIds: next })
+    const current = allGroups.find(g => g.id === id)
+    void groups.toggleJoin(id, current?.joined ?? false)
+  }
+
+  const remove = async (id: string) => {
+    await groups.remove(id)
+    if (selected === id) setSelected(null)
   }
 
   /* ---------------- empty (S09a) — amber system ---------------- */
@@ -98,8 +111,22 @@ export function Groups() {
     <DeviceFrame>
       <ScreenHeader title="" onBack={() => navigate('/home')} />
       <Content className="flex flex-col">
-        <h1 className="text-[24px] leading-[29px] font-semibold">Saath Groups</h1>
-        <p className="mt-2 text-[14px] text-[#616161]">Find company for your commute</p>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-[24px] leading-[29px] font-semibold">Saath Groups</h1>
+            <p className="mt-2 text-[14px] text-[#616161]">Find company for your commute</p>
+          </div>
+          <button
+            type="button"
+            aria-label="Create a group"
+            onClick={() => setCreating(true)}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[8px] border border-[#202020] bg-white text-[24px] leading-none active:translate-y-[1px]"
+          >
+            +
+          </button>
+        </div>
+
+        <SyncBadge source={groups.source} loading={groups.loading} />
 
         {/* filters */}
         <div className="mt-4 grid grid-cols-2 gap-3">
@@ -129,15 +156,14 @@ export function Groups() {
 
         {/* group cards */}
         <ul className="mt-4 space-y-3">
-          {groups.map(g => {
+          {visible.map(g => {
             const isSelected = selected === g.id
-            const isJoined = state.joinedGroupIds.includes(g.id)
+            const isJoined = g.joined
             return (
               <li key={g.id}>
                 <button
                   type="button"
-                  onClick={() => setSelected(g.id)}
-                  onDoubleClick={() => navigate(`/groups/${g.id}`)}
+                  onClick={() => setSelected(isSelected ? null : g.id)}
                   className={`w-full rounded-[8px] px-4 py-4 text-left transition-all ${
                     isSelected ? 'border-2 border-[#202020] bg-[#F2F2F2]' : 'border border-[#DDDDDD] bg-white'
                   }`}
@@ -156,11 +182,7 @@ export function Groups() {
                       </p>
                     </div>
                     <span className="shrink-0 text-[14px] font-semibold">
-                      {isSelected ? (
-                        isJoined ? 'Joined' : 'Selected'
-                      ) : (
-                        <span className="underline underline-offset-2">View →</span>
-                      )}
+                      {isJoined ? 'Joined' : <span className="underline underline-offset-2">View →</span>}
                     </span>
                   </div>
                 </button>
@@ -181,6 +203,14 @@ export function Groups() {
                     >
                       {isJoined ? 'Leave' : 'Join'}
                     </Button>
+                    <Button
+                      full={false}
+                      variant="secondary"
+                      className="min-h-[44px] flex-1"
+                      onClick={() => void remove(g.id)}
+                    >
+                      Delete
+                    </Button>
                   </div>
                 ) : null}
               </li>
@@ -188,16 +218,30 @@ export function Groups() {
           })}
         </ul>
 
-        {groups.length === 0 ? (
+        {visible.length === 0 ? (
           <div className="mt-6 rounded-[8px] border border-dashed border-[#B8B8B8] px-4 py-8 text-center">
-            <p className="text-[14px] text-[#616161]">No groups on this line yet.</p>
-            <button
-              type="button"
-              onClick={() => setLine(LINES_FILTER[0])}
-              className="mt-2 text-[14px] font-semibold underline underline-offset-2"
-            >
-              Show all lines
-            </button>
+            <p className="text-[14px] text-[#616161]">
+              {allGroups.length === 0
+                ? 'No groups yet — start the first one for your route.'
+                : 'No groups on this line yet.'}
+            </p>
+            {allGroups.length === 0 ? (
+              <button
+                type="button"
+                onClick={() => setCreating(true)}
+                className="mt-2 text-[14px] font-semibold underline underline-offset-2"
+              >
+                Create a group
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setLine(LINES_FILTER[0])}
+                className="mt-2 text-[14px] font-semibold underline underline-offset-2"
+              >
+                Show all lines
+              </button>
+            )}
           </div>
         ) : null}
 
@@ -211,14 +255,29 @@ export function Groups() {
         <div className="pb-2">
           <Button
             onClick={() => {
-              join(selected)
-              navigate(`/groups/${selected}`)
+              const target = selected ?? visible[0]?.id
+              if (!target) {
+                setCreating(true)
+                return
+              }
+              if (!visible.find(g => g.id === target)?.joined) join(target)
+              navigate(`/groups/${target}`)
             }}
           >
-            {state.joinedGroupIds.includes(selected) ? 'Open morning buddies' : 'Join morning buddies'}
+            {selected ? 'Open group' : visible.length ? 'Open first group' : 'Create a group'}
           </Button>
         </div>
       </Content>
+
+      {creating ? (
+        <CreateGroupModal
+          onClose={() => setCreating(false)}
+          onCreated={id => {
+            setCreating(false)
+            navigate(`/groups/${id}`)
+          }}
+        />
+      ) : null}
     </DeviceFrame>
   )
 }
@@ -252,9 +311,9 @@ const WINDOWS = ['08:00–08:30', '08:15–08:45', '08:30–09:00', '17:00–18:
 const LINE_OPTIONS = ['Western', 'Central', 'Harbour']
 
 /**
- * Create-group sheet opened by the "+" on S09a. Styled in the amber system so it
- * reads as part of that screen; on success the new group is persisted to the
- * mock store and the flow continues into the group detail screen.
+ * Create-group sheet opened by the "+" on S09/S09a. Styled in the amber system.
+ * On success the group is written through the backend (`useGroups.create`) and
+ * the flow continues into the group detail screen.
  */
 function CreateGroupModal({
   onClose,
@@ -263,35 +322,37 @@ function CreateGroupModal({
   onClose: () => void
   onCreated: (id: string) => void
 }) {
-  const { state, update } = useStore()
+  const { state } = useStore()
+  const groups = useGroups()
   const [name, setName] = useState('')
   const [lineOpt, setLineOpt] = useState('Western')
+  const [fromStation, setFromStation] = useState(state.fromStation)
+  const [toStation, setToStation] = useState(state.toStation)
   const [win, setWin] = useState(WINDOWS[1])
   const [error, setError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
 
-  const submit = () => {
+  const submit = async () => {
     const trimmed = name.trim()
     if (trimmed.length < 3) {
       setError('Give your group a name of at least 3 characters.')
       return
     }
-    const id = `custom-${Date.now()}`
-    const group: BuddyGroup = {
-      id,
-      name: trimmed,
-      from: state.fromStation,
-      to: state.toStation,
-      window: win,
-      members: 1,
-      line: lineOpt,
-      verifiedOrganiser: true,
-      joined: true,
+    if (fromStation === toStation) {
+      setError('Pick two different stations for the route.')
+      return
     }
-    update({
-      customGroups: [...(state.customGroups ?? []), group],
-      joinedGroupIds: [...state.joinedGroupIds, id],
+    setSaving(true)
+    const group = await groups.create({
+      name: trimmed,
+      line: lineOpt,
+      from: fromStation,
+      to: toStation,
+      window: win,
     })
-    onCreated(id)
+    setSaving(false)
+    if (group) onCreated(group.id)
+    else setError('Could not create the group. Try again.')
   }
 
   return (
@@ -350,7 +411,15 @@ function CreateGroupModal({
             <select
               id="cg-line"
               value={lineOpt}
-              onChange={e => setLineOpt(e.target.value)}
+              onChange={e => {
+                const l = e.target.value
+                setLineOpt(l)
+                const s = STATIONS[`${l} line`] ?? []
+                if (s.length) {
+                  setFromStation(s[0])
+                  setToStation(s[s.length - 1])
+                }
+              }}
               className="mt-2 w-full border-[3px] border-[#111111] bg-white px-3 py-3 text-[16px]"
             >
               {LINE_OPTIONS.map(l => (
@@ -379,12 +448,52 @@ function CreateGroupModal({
           </div>
         </div>
 
+        {/* route — full station list for the chosen line */}
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <div>
+            <label className="block font-display text-[18px] tracking-wide" htmlFor="cg-from">
+              FROM
+            </label>
+            <select
+              id="cg-from"
+              value={fromStation}
+              onChange={e => setFromStation(e.target.value)}
+              className="mt-2 w-full border-[3px] border-[#111111] bg-white px-3 py-3 text-[16px]"
+            >
+              {(STATIONS[`${lineOpt} line`] ?? []).map(s => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block font-display text-[18px] tracking-wide" htmlFor="cg-to">
+              TO
+            </label>
+            <select
+              id="cg-to"
+              value={toStation}
+              onChange={e => setToStation(e.target.value)}
+              className="mt-2 w-full border-[3px] border-[#111111] bg-white px-3 py-3 text-[16px]"
+            >
+              {(STATIONS[`${lineOpt} line`] ?? []).map(s => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
         <p className="mt-3 text-[14px] leading-[19px] text-[#5A5750]">
-          Runs on your usual route: {state.fromStation} → {state.toStation}.
+          Runs {fromStation} → {toStation} on the {lineOpt} line.
         </p>
 
         <div className="mt-5">
-          <SplitButton onClick={submit}>CREATE GROUP</SplitButton>
+          <SplitButton onClick={() => void submit()} disabled={saving}>
+            {saving ? 'CREATING…' : 'CREATE GROUP'}
+          </SplitButton>
         </div>
       </div>
     </div>

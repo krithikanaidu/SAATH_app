@@ -4,25 +4,38 @@ import { DeviceFrame, Content } from '../components/DeviceFrame'
 import { Button } from '../components/Button'
 import { ScreenHeader } from '../components/ScreenHeader'
 import { useStore } from '../lib/store'
-import { BUDDY_GROUPS, RECENT_TRIPS } from '../lib/mockData'
+import { useAuth } from '../lib/auth'
+import { useGroups, useTrips } from '../lib/hooks'
+import { STATIONS } from '../lib/mockData'
 import { AmberShell, SplitButton } from '../components/amber'
+import { SyncBadge } from '../components/SyncBadge'
 import type { Language } from '../lib/types'
 
 /**
- * S12 — rewards + trip summary.
+ * S12 — rewards + trip summary + profile.
  *  ?state=empty → S12a
+ *
+ * Profile data comes from the signed-in Supabase user (falling back to local
+ * state when there is no backend). Trips and joined groups come from the
+ * backend via `useTrips` / `useGroups`.
  */
 
 export function Rewards() {
   const navigate = useNavigate()
   const { state } = useStore()
+  const { profile, mode } = useAuth()
+  const groups = useGroups()
+  const trips = useTrips()
   const empty = new URLSearchParams(location.search).get('state') === 'empty'
   const [settings, setSettings] = useState(false)
+  const [editing, setEditing] = useState(false)
 
-  // resolve the buddy group the user actually joined (mock + custom groups)
-  const joinedGroupName = [...BUDDY_GROUPS, ...state.customGroups].find(
-    g => state.joinedGroupIds.includes(g.id),
-  )?.name
+  // resolve the buddy group the user actually joined (backend + local groups)
+  const joinedGroupName = groups.data.find(g => g.joined)?.name
+
+  const displayName = profile?.name || state.name || 'Commuter'
+  const phone = profile?.phone || state.phone || ''
+  const points = profile?.points ?? state.points
 
   /* ---------------- empty (S12a) — amber system ---------------- */
   if (empty) {
@@ -51,11 +64,13 @@ export function Rewards() {
             style={{ borderColor: '#111111' }}
           >
             <p className="font-display text-[20px] tracking-[0.04em]">YOUR POINTS</p>
-            <p className="mt-1 font-display text-[64px] leading-none">0</p>
+            <p className="mt-1 font-display text-[64px] leading-none">{points}</p>
             <div className="mt-4 h-6 border-[3px] bg-white" style={{ borderColor: '#111111' }}>
-              <div className="h-full w-0" />
+              <div className="h-full" style={{ width: `${Math.min(100, (points / 300) * 100)}%` }} />
             </div>
-            <p className="mt-3 font-display text-[18px] tracking-[0.04em]">300 TO NEXT REWARD</p>
+            <p className="mt-3 font-display text-[18px] tracking-[0.04em]">
+              {Math.max(0, 300 - points)} TO NEXT REWARD
+            </p>
           </div>
 
           <h2 className="mt-7 font-display text-[32px] leading-none tracking-wide">NO TRIPS YET</h2>
@@ -81,14 +96,60 @@ export function Rewards() {
     )
   }
 
+  if (editing) {
+    return <EditProfile onDone={() => setEditing(false)} />
+  }
+
   return (
     <DeviceFrame>
       <ScreenHeader title="" onBack={() => navigate('/home')} />
       <Content className="flex flex-col">
         <h1 className="text-[24px] leading-[29px] font-semibold">Your trip, wrapped up</h1>
         <p className="mt-2 text-[14px] text-[#616161]">
-          Illustrative trip history &amp; non-cash points
+          {mode === 'supabase'
+            ? 'Signed in · points recognise off-peak choices'
+            : 'Illustrative trip history & non-cash points'}
         </p>
+
+        {/* profile card */}
+        <div className="mt-4 rounded-[8px] border border-[#DDDDDD] bg-[#F2F2F2] px-4 py-4">
+          <div className="flex items-center gap-3">
+            <span
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-[#202020] bg-white text-[16px] font-semibold"
+              aria-hidden
+            >
+              {displayName.slice(0, 1).toUpperCase()}
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-[18px] leading-[23px] font-semibold">{displayName}</p>
+              <p className="truncate text-[14px] text-[#616161]">{phone || 'No number on file'}</p>
+            </div>
+          </div>
+          <dl className="mt-3 space-y-1 text-[15px] leading-[21px]">
+            <div className="flex justify-between">
+              <dt className="text-[#616161]">Route</dt>
+              <dd className="font-semibold">
+                {state.fromStation} → {state.toStation}
+              </dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-[#616161]">Line</dt>
+              <dd className="font-semibold">{state.usualLine.replace(' line', '')}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-[#616161]">Usual departure</dt>
+              <dd className="font-semibold">{state.departureTime}</dd>
+            </div>
+          </dl>
+          <SyncBadge source={groups.source} label={mode === 'supabase' ? undefined : 'demo mode'} />
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="mt-3 text-[14px] font-semibold underline underline-offset-2"
+          >
+            Edit profile
+          </button>
+        </div>
 
         {/* points card */}
         <div className="mt-4 rounded-[8px] border border-[#DDDDDD] bg-[#F2F2F2] px-4 py-5">
@@ -97,7 +158,7 @@ export function Rewards() {
           <p className="mt-3 text-[16px] leading-[24px]">
             You chose a lower-crowd departure.
             <br />
-            Your balance: {state.points} points
+            Your balance: {points} points
           </p>
         </div>
 
@@ -109,28 +170,35 @@ export function Rewards() {
             <br />
             {state.chosenDeparture} departure · picked from Smart Window
             <br />
-            Buddy group:{' '}
-            {joinedGroupName ?? 'No buddy group joined'}
+            Buddy group: {joinedGroupName ?? 'No buddy group joined'}
           </p>
         </div>
 
         {/* recent trips */}
         <h2 className="mt-5 text-[18px] leading-[23px] font-semibold">Recent trips</h2>
         <ul className="mt-2">
-          {RECENT_TRIPS.map(t => (
-            <li
-              key={t.id}
-              className="flex items-center justify-between border-b border-[#DDDDDD] py-3.5"
-            >
-              <span>
-                <span className="block text-[16px] font-semibold">{t.when}</span>
-                <span className="mt-0.5 block text-[14px] text-[#616161]">
-                  {t.from} → {t.to}
-                </span>
-              </span>
-              <span className="text-[15px]">+{t.points} pts</span>
+          {trips.data.length === 0 ? (
+            <li className="rounded-[8px] border border-dashed border-[#B8B8B8] px-4 py-6 text-center">
+              <p className="text-[14px] text-[#616161]">
+                No trips recorded yet. Complete a journey to start your history.
+              </p>
             </li>
-          ))}
+          ) : (
+            trips.data.map(t => (
+              <li
+                key={t.id}
+                className="flex items-center justify-between border-b border-[#DDDDDD] py-3.5"
+              >
+                <span>
+                  <span className="block text-[16px] font-semibold">{t.when}</span>
+                  <span className="mt-0.5 block text-[14px] text-[#616161]">
+                    {t.from} → {t.to}
+                  </span>
+                </span>
+                <span className="text-[15px]">+{t.points} pts</span>
+              </li>
+            ))
+          )}
         </ul>
 
         <p className="mt-3 text-[12px] leading-[17px] text-[#616161]">
@@ -141,6 +209,157 @@ export function Rewards() {
 
         <div className="pb-2">
           <Button onClick={() => navigate('/home')}>Plan next trip</Button>
+          <button
+            type="button"
+            onClick={() => setSettings(true)}
+            className="mx-auto mt-3 block text-[13px] text-[#616161] underline underline-offset-2"
+          >
+            Settings
+          </button>
+        </div>
+      </Content>
+    </DeviceFrame>
+  )
+}
+
+/**
+ * Edit-profile sheet. Writes to the local store always and to the Supabase
+ * profile when a session exists.
+ */
+function EditProfile({ onDone }: { onDone: () => void }) {
+  const { state, update } = useStore()
+  const { profile, syncProfile } = useAuth()
+  const [name, setName] = useState(profile?.name || state.name || '')
+  const [line, setLine] = useState(state.usualLine)
+  const [from, setFrom] = useState(state.fromStation)
+  const [to, setTo] = useState(state.toStation)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  const stations = STATIONS[line] ?? STATIONS['Western line']
+  const sameStation = from === to
+
+  const save = async () => {
+    if (sameStation) return
+    setSaving(true)
+    update({
+      ...(name.trim() ? { name: name.trim() } : {}),
+      usualLine: line,
+      fromStation: from,
+      toStation: to,
+    })
+    await syncProfile({
+      ...(name.trim() ? { name: name.trim() } : {}),
+      usualLine: line,
+      fromStation: from,
+      toStation: to,
+    })
+    setSaving(false)
+    setSaved(true)
+    setTimeout(onDone, 600)
+  }
+
+  return (
+    <DeviceFrame>
+      <ScreenHeader title="" onBack={onDone} />
+      <Content className="flex flex-col">
+        <h1 className="text-[24px] leading-[29px] font-semibold">Edit profile</h1>
+        <p className="mt-2 text-[14px] text-[#616161]">
+          Your name and usual journey. Changes apply across the app.
+        </p>
+
+        <div className="mt-5">
+          <label htmlFor="ep-name" className="block text-[14px] font-semibold">
+            Name
+          </label>
+          <input
+            id="ep-name"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            placeholder="Your name"
+            className="mt-2 w-full rounded-[8px] border border-[#DDDDDD] bg-white px-4 py-3.5 text-[16px]"
+          />
+        </div>
+
+        <div className="mt-4">
+          <label htmlFor="ep-line" className="block text-[14px] font-semibold">
+            Line
+          </label>
+          <select
+            id="ep-line"
+            value={line}
+            onChange={e => {
+              const l = e.target.value
+              setLine(l)
+              const s = STATIONS[l] ?? []
+              if (s.length) {
+                setFrom(s[0])
+                setTo(s[s.length - 1])
+              }
+            }}
+            className="mt-2 w-full rounded-[8px] border border-[#DDDDDD] bg-white px-4 py-3.5 text-[16px]"
+          >
+            {Object.keys(STATIONS).map(l => (
+              <option key={l} value={l}>
+                {l}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <div>
+            <label htmlFor="ep-from" className="block text-[14px] font-semibold">
+              From
+            </label>
+            <select
+              id="ep-from"
+              value={from}
+              onChange={e => setFrom(e.target.value)}
+              className="mt-2 w-full rounded-[8px] border border-[#DDDDDD] bg-white px-4 py-3.5 text-[16px]"
+            >
+              {stations.map(s => (
+                <option key={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="ep-to" className="block text-[14px] font-semibold">
+              To
+            </label>
+            <select
+              id="ep-to"
+              value={to}
+              onChange={e => setTo(e.target.value)}
+              className={`mt-2 w-full rounded-[8px] border bg-white px-4 py-3.5 text-[16px] ${
+                sameStation ? 'border-[#D92D20]' : 'border-[#DDDDDD]'
+              }`}
+            >
+              {stations.map(s => (
+                <option key={s}>{s}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {sameStation ? (
+          <p role="alert" className="mt-3 text-[13px] text-[#D92D20]">
+            Pick two different stations.
+          </p>
+        ) : null}
+
+        {saved ? (
+          <p role="status" className="mt-3 text-[14px] font-semibold text-[#1B7F4B]">
+            Saved.
+          </p>
+        ) : null}
+
+        <div className="flex-1" />
+
+        <div className="pb-2">
+          <Button onClick={() => void save()} disabled={sameStation || saving}>
+            {saving ? 'Saving…' : 'Save changes'}
+          </Button>
         </div>
       </Content>
     </DeviceFrame>
@@ -156,11 +375,23 @@ const LANGUAGE_OPTIONS: { id: Language; label: string }[] = [
 ]
 
 /**
- * Compact settings sheet behind the gear on S12a. It only touches state the app
- * already keeps (language, large text) plus a full reset of the mock backend.
+ * Compact settings sheet behind the gear on S12a and the "Settings" link on S12.
+ * It touches local state (language, large text), mirrors language/size to the
+ * Supabase profile when signed in, offers a full reset, and lets the user sign
+ * out of their account.
  */
 function SettingsSheet({ onClose }: { onClose: () => void }) {
   const { state, update, reset } = useStore()
+  const { profile, signOut, syncProfile, mode } = useAuth()
+  const [signingOut, setSigningOut] = useState(false)
+
+  const doSignOut = async () => {
+    setSigningOut(true)
+    await signOut()
+    setSigningOut(false)
+    onClose()
+    window.location.assign('/')
+  }
 
   return (
     <div
@@ -189,6 +420,19 @@ function SettingsSheet({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
+        {profile ? (
+          <p className="mt-3 text-[14px] leading-[19px] text-[#5A5750]">
+            Signed in as {profile.name}
+            {profile.phone ? ` · ${profile.phone}` : ''}
+          </p>
+        ) : (
+          <p className="mt-3 text-[14px] leading-[19px] text-[#5A5750]">
+            {mode === 'supabase'
+              ? 'Not signed in.'
+              : 'Demo mode — backend not connected. Data stays on this device.'}
+          </p>
+        )}
+
         <fieldset className="mt-5">
           <legend className="font-display text-[18px] tracking-wide">LANGUAGE</legend>
           <div className="mt-2 flex border-[3px]" style={{ borderColor: '#111111' }}>
@@ -199,7 +443,10 @@ function SettingsSheet({ onClose }: { onClose: () => void }) {
                   key={l.id}
                   type="button"
                   aria-pressed={active}
-                  onClick={() => update({ language: l.id })}
+                  onClick={() => {
+                    update({ language: l.id })
+                    void syncProfile({ language: l.id })
+                  }}
                   className={`flex-1 px-2 py-3 text-[15px] ${i > 0 ? 'border-l-[3px] border-[#111111]' : ''} ${
                     active ? 'bg-[#F9B800] font-bold' : 'bg-white text-[#5A5750]'
                   }`}
@@ -217,7 +464,11 @@ function SettingsSheet({ onClose }: { onClose: () => void }) {
             type="button"
             role="switch"
             aria-checked={state.largeText}
-            onClick={() => update({ largeText: !state.largeText })}
+            onClick={() => {
+              const next = !state.largeText
+              update({ largeText: next })
+              void syncProfile({ largeText: next })
+            }}
             className={`flex h-9 w-16 items-center border-[3px] px-1 ${state.largeText ? 'bg-[#F9B800]' : 'bg-white'}`}
             style={{ borderColor: '#111111' }}
           >
@@ -235,7 +486,7 @@ function SettingsSheet({ onClose }: { onClose: () => void }) {
           sign-in.
         </p>
 
-        <div className="mt-4">
+        <div className="mt-4 space-y-3">
           <button
             type="button"
             onClick={() => {
@@ -247,6 +498,16 @@ function SettingsSheet({ onClose }: { onClose: () => void }) {
           >
             RESET APP
           </button>
+          {profile ? (
+            <button
+              type="button"
+              onClick={() => void doSignOut()}
+              disabled={signingOut}
+              className="w-full border-[3px] border-[#111111] bg-[#FFE9E6] px-4 py-3.5 font-display text-[20px] tracking-wide text-[#C81D25] disabled:opacity-60"
+            >
+              {signingOut ? 'SIGNING OUT…' : 'SIGN OUT'}
+            </button>
+          ) : null}
         </div>
       </div>
     </div>

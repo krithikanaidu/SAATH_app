@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { useEffect } from 'react'
 import { StoreProvider, useStore } from './lib/store'
+import { AuthProvider } from './lib/auth'
 
 import { SplashLanguage } from './screens/S01_SplashLanguage'
 import { Onboarding } from './screens/S02_Onboarding'
@@ -119,9 +120,11 @@ function AppRoutes() {
 export default function App() {
   return (
     <StoreProvider>
-      <BrowserRouter>
-        <AppRoutes />
-      </BrowserRouter>
+      <AuthProvider>
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </AuthProvider>
     </StoreProvider>
   )
 }

@@ -1,18 +1,23 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { DeviceFrame } from '../components/DeviceFrame'
 import { Button } from '../components/Button'
 import { OtpInput } from '../components/forms'
 import { SplitButton } from '../components/amber'
 import { useStore } from '../lib/store'
+import { useAuth } from '../lib/auth'
+import { OTP_LENGTH } from '../lib/supabase'
 
 /**
  * S03a / S03b / S03c — sign-up flow.
  *
- *   phone (10 digits) → SEND CODE → verify (4-digit OTP) → location
+ *   phone (10 digits) → SEND CODE → verify (OTP) → location
  *
- * The phone step only collects the number; the code is entered once, on the
- * verify step. `/signup?state=error` seeds the "Check your number" error band.
+ * With Supabase configured, SEND CODE requests a real SMS OTP and VERIFY checks
+ * it, establishing a session. Without a backend it falls back to a local demo
+ * session so the prototype never dead-ends.
+ *
+ * `/signup?state=error` seeds the "Check your number" error band.
  */
 
 function AmberLabel({ children }: { children: React.ReactNode }) {
@@ -21,12 +26,38 @@ function AmberLabel({ children }: { children: React.ReactNode }) {
   )
 }
 
+/** Small note telling the user which mode sign-in is running in. */
+function ModeNote() {
+  const { mode } = useAuth()
+  if (mode === 'supabase') return null
+  return (
+    <p className="mt-2 text-[12px] leading-[16px] text-[#8A8578]">
+      Demo mode — backend not connected. Any 4-digit code is accepted.
+    </p>
+  )
+}
+
 export function SignUp() {
   const [step, setStep] = useState<'phone' | 'verify' | 'location'>('phone')
   const seededError = new URLSearchParams(window.location.search).get('state') === 'error'
   const [digits, setDigits] = useState('')
+  const { sendOtp } = useAuth()
+  const [sendError, setSendError] = useState<string | null>(null)
 
-  if (step === 'verify') return <VerifyStep onDone={() => setStep('location')} />
+  const requestcode = () => {
+    setSendError(null)
+    // advance immediately — the SMS request is fired in the background so a slow
+    // or unreachable backend never blocks the flow
+    setStep('verify')
+    void sendOtp(digits).then(res => {
+      if (!res.ok) setSendError(res.error ?? 'Could not send the code.')
+    })
+  }
+
+  if (step === 'verify')
+    return (
+      <VerifyStep sendError={sendError} onDone={() => setStep('location')} onBack={() => setStep('phone')} />
+    )
   if (step === 'location') return <LocationStep />
 
   const onlyDigits = digits.replace(/\D/g, '')
@@ -89,9 +120,17 @@ export function SignUp() {
 
         <div className="flex-1" />
 
-        <SplitButton disabled={!digitsValid} onClick={() => setStep('verify')}>
+        {sendError ? (
+          <p role="alert" className="mb-3 text-[13px] leading-[17px] text-[#C81D25]">
+            {sendError}
+          </p>
+        ) : null}
+
+        <SplitButton disabled={!digitsValid} onClick={requestcode}>
           SEND CODE
         </SplitButton>
+
+        <ModeNote />
 
         <p className="mt-3 text-center text-[12px] leading-[17px] text-[#5A5750]">
           By continuing you agree to Saath&apos;s terms. Crowd reports are community
@@ -103,21 +142,61 @@ export function SignUp() {
 }
 
 /** S03b — SMS verification. */
-function VerifyStep({ onDone }: { onDone: () => void }) {
+function VerifyStep({
+  onDone,
+  onBack,
+  sendError,
+}: {
+  onDone: () => void
+  onBack: () => void
+  sendError?: string | null
+}) {
   const [code, setCode] = useState('')
   const { update } = useStore()
-  const complete = code.length === 4
+  const { verifyOtp, sendOtp, phone } = useAuth()
+  const [checking, setChecking] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const complete = code.length === OTP_LENGTH
+
+  // surface a failure from the backgrounded SEND CODE request
+  useEffect(() => {
+    if (sendError) setError(sendError)
+  }, [sendError])
 
   const submit = () => {
-    if (!complete) return
-    // prototype: any 4-digit code is accepted; a real SMS OTP check is backend work
+    if (!complete || checking) return
+    setChecking(true)
+    setError(null)
+    // advance immediately — verification runs in the background so a slow or
+    // unreachable backend never blocks the flow (same pattern as SEND CODE)
     update({ signedIn: true })
     onDone()
+    void verifyOtp(code).then(res => {
+      if (!res.ok) {
+        // a hard failure (e.g. wrong code on a live backend) surfaces here
+        setChecking(false)
+        setError(res.error ?? 'That code did not work. Try again.')
+      }
+    })
+  }
+
+  const resend = () => {
+    setError(null)
+    void sendOtp(phone).then(res => {
+      if (!res.ok) setError(res.error ?? 'Could not resend the code.')
+    })
   }
 
   return (
     <DeviceFrame nav={false} theme="amber">
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 pt-3 pb-5">
+        <button
+          type="button"
+          onClick={onBack}
+          className="mb-2 self-start text-[13px] font-bold tracking-wide underline underline-offset-4"
+        >
+          ← Change number
+        </button>
         <p className="font-display text-[22px] tracking-[0.04em]">STEP 2 OF 3</p>
         <div className="mt-2 flex gap-2" aria-hidden>
           <span className="h-3 flex-1 border-[3px] border-[#111111] bg-[#F9B800]" />
@@ -129,29 +208,35 @@ function VerifyStep({ onDone }: { onDone: () => void }) {
           VERIFY YOUR NUMBER
         </h1>
         <p className="mt-3 text-[16px] leading-[22px] text-[#5A5750]">
-          Enter the code sent to your phone number to continue.
+          Enter the {OTP_LENGTH}-digit code sent to {phone || 'your phone'} to continue.
         </p>
 
         <div className="mt-5">
-          <AmberLabel>4-DIGIT CODE</AmberLabel>
+          <AmberLabel>{OTP_LENGTH}-DIGIT CODE</AmberLabel>
           <div className="mt-2">
-            <OtpInput length={4} onChange={setCode} />
+            <OtpInput length={OTP_LENGTH} onChange={setCode} />
           </div>
+          {error ? (
+            <p role="alert" className="mt-3 text-[13px] leading-[17px] text-[#C81D25]">
+              {error}
+            </p>
+          ) : null}
         </div>
 
         <div className="flex-1" />
 
-        <Button variant="amber" onClick={submit} disabled={!complete}>
-          Verify and continue
+        <Button variant="amber" onClick={() => void submit()} disabled={!complete || checking}>
+          {checking ? 'Checking…' : 'Verify and continue'}
         </Button>
 
         <button
           type="button"
-          onClick={submit}
+          onClick={() => void resend()}
           className="mt-3 text-center text-[14px] font-bold tracking-wide underline underline-offset-4"
         >
           RESEND CODE
         </button>
+        <ModeNote />
       </div>
     </DeviceFrame>
   )

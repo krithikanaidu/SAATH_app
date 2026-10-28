@@ -6,6 +6,13 @@ export type Language = 'en' | 'hi' | 'mr'
 
 export type TravelAs = 'woman' | 'senior' | 'differently-abled' | null
 
+/**
+ * How often the user makes the journey. Drives the flexible departure picker
+ * on S04 — the user picks a time that matches their own frequency rather than
+ * choosing from a fixed list.
+ */
+export type DepartureFrequency = 'weekdays' | 'weekends' | 'daily'
+
 export interface Train {
   id: string
   departure: string
@@ -91,7 +98,9 @@ export interface AppState {
   usualLine: string
   fromStation: string
   toStation: string
+  /** display string, e.g. "08:30 AM · Weekdays"; use db.parseDeparture for "HH:MM" */
   departureTime: string
+  departureFrequency: DepartureFrequency
   travelAs: TravelAs
   points: number
   joinedGroupIds: string[]

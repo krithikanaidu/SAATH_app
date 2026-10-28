@@ -2,14 +2,14 @@
 
 A click-through, installable Progressive Web App built **from the Figma file `Px1mKHhktxOTDt3Ts4o2L4`**. Every screen, button, tab, form and modal in the prototype is wired into a working journey — onboarding → sign-in → setup → daily commute → safety → rewards — and runs offline as an installable app.
 
-> **Scope note:** this is a *design-faithful prototype*. All data is mock/local (see [Data & backend](#data--what-still-needs-a-backend)). Nothing is sent to a server, and no API keys or secrets exist in this codebase.
+> **Scope note:** this is a *design-faithful prototype* with a real **Supabase backend** for auth, profiles, groups, crowd reports and trips. When the backend is unconfigured or unreachable the app degrades to a local session and keeps working (see [Backend](#backend--supabase)). No secrets exist in this codebase — only a publishable (anon) key, which is safe for the browser and gated by Row Level Security.
 
 ---
 
 ## Table of contents
 
-1. [Tech stack](#tech-stack)
-2. [Quick start](#quick-start)
+1. [Tech stack & quick start](#tech-stack)
+2. [Backend & Supabase](#backend--supabase)
 3. [How the design was reproduced](#how-the-design-was-reproduced)
 4. [Screen & route inventory](#screen--route-inventory)
 5. [User flows](#user-flows)
@@ -30,11 +30,12 @@ A click-through, installable Progressive Web App built **from the Figma file `Px
 | UI | **React 19** + **TypeScript** | type-safe across ~31 screens |
 | Styling | **Tailwind CSS v4** (`@tailwindcss/vite`) | design tokens live in `@theme` in `src/index.css` — no config file |
 | Routing | **React Router 7** (`BrowserRouter`) | real URLs, deep-linkable state screens |
-| State | React Context + `localStorage` | mock backend, survives refresh |
+| State | React Context + `localStorage` | offline-first cache, survives refresh |
+| Backend | **Supabase** (`@supabase/supabase-js`) | phone-OTP auth, Postgres, Row Level Security |
 | Service worker | hand-written `public/sw.js` | explicit control over what is **never** cached |
 | Fonts | self-hosted `.woff2` in `public/fonts/` | correct typography offline (no CDN dependency) |
 
-No UI kit, no CSS-in-JS, no state library. The whole dependency surface is React + Router.
+No UI kit, no CSS-in-JS, no state library. The dependency surface is React + Router + Supabase.
 
 ```bash
 npm install
@@ -43,6 +44,56 @@ npm run build      # typecheck + production build -> dist/
 npm run preview    # serve dist/ at http://localhost:4173
 npm run typecheck  # tsc --noEmit only
 ```
+
+The production build splits Supabase and React into their own cached vendor chunks (`supabase-*.js`, `react-*.js`), so the app's own code stays ~118 kB and the heavy vendor code is only downloaded once.
+
+---
+
+## Backend & Supabase
+
+The app ships with a real backend: **Supabase** handles phone-OTP auth, profiles, buddy groups, crowd reports and trips. It is designed to degrade gracefully — if the project is unconfigured or unreachable, the app falls back to a local session and keeps working, so the prototype never dead-ends.
+
+### 1. Configure the environment
+
+`.env.local` (git-ignored) holds the project URL and **publishable** key:
+
+```bash
+VITE_SUPABASE_URL=https://<project-ref>.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_xxx   # safe for the browser, gated by RLS
+VITE_OTP_LENGTH=6                                  # optional — must match the dashboard setting
+```
+
+> **Note on your current credentials:** the project ref `yitrfbddwxkyaoybptdw` does not resolve in DNS (`getaddrinfo ENOTFOUND`), so the backend is currently unreachable and the app runs in demo mode. Verify the ref in your Supabase dashboard → *Settings → API* and update `.env.local`. Nothing else needs to change — the same code switches to live mode automatically once the host resolves.
+
+Only a publishable (anon) key ships to the browser. There is no service-role key, no secret, and every table is protected by Row Level Security, so the key alone cannot read or write another user's data.
+
+### 2. Create the schema
+
+Run [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) once in the Supabase SQL editor (or `supabase db push`). It creates:
+
+| Table | Purpose |
+| --- | --- |
+| `profiles` | one row per user — name, language, route, departure, points, toggles |
+| `buddy_groups` | user-created groups (name, line, from/to, window, organiser) |
+| `group_members` | membership, with `organiser` / `member` roles |
+| `crowd_reports` | anonymous crowd reports per train + compartment |
+| `trips` | completed journeys and the points they earned |
+
+The migration also installs a trigger that auto-creates a `profiles` row whenever a new auth user appears, and enables RLS with owner-scoped policies on every table.
+
+### 3. Turn on phone auth
+
+Dashboard → *Authentication → Providers → Phone* and enable it. You also need an SMS provider (Twilio, Vonage, or Twilio Verify). Set the **OTP length** to match `VITE_OTP_LENGTH` (Supabase's default is 6; the Figma design shows 4 — either works as long as the two agree).
+
+### How the app behaves in each mode
+
+| Situation | What happens |
+| --- | --- |
+| Backend configured **and** reachable | real phone OTP, sessions, and data written to Postgres |
+| Backend configured but **unreachable** | `pingBackend()` fails → the flow continues on a local session; a `Saved on this device` badge appears instead of `Live · synced` |
+| Backend **not configured** | same local fallback, from the first screen |
+
+Every data call goes through [`src/lib/db.ts`](src/lib/db.ts), which tries Supabase first (bounded by a timeout) and falls back to the local store. Screens never talk to `supabase` directly, and each result carries a `source: 'remote' | 'local'` flag surfaced by the `SyncBadge` component.
 
 ---
 
@@ -78,7 +129,6 @@ Fonts are **self-hosted** (Inter variable, Bebas Neue, and Noto Sans Devanagari 
 Layout is **mobile-first**: below 480 px the 390 × 844 Figma canvas is full-bleed; at ≥480 px it becomes a centred phone canvas with the design's shadow, so desktop viewing stays faithful.
 
 Reference renders of every Figma screen live in [`design/screens/`](design/screens/) and were used as ground truth while building.
-
 ---
 
 ## Screen & route inventory
@@ -89,7 +139,7 @@ All 31 screens from the prototype are implemented. State screens are **deep-link
 | --- | --- | --- |
 | `/` | S01 Splash + language picker (amber) | — |
 | `/onboarding` | S02a · S02b · S02c (amber carousel) | — |
-| `/signup` | S03a phone entry (amber) → S03b verify 4-digit code (amber) → S03c location (amber) | `error` → **S03a_Error** (amber, inline validation) |
+| `/signup` | S03a phone entry (amber) → S03b verify SMS code (amber) → S03c location (amber) | `error` → **S03a_Error** (amber, inline validation) |
 | `/setup` | S04a usual journey (amber) → S04b about you (amber) | `error` → **S04a_Error** (amber, same-station validation) |
 | `/home` | S05 Home (mono) | `loading` **S05a** · `empty` **S05b** · `offline` **S05c** · `location-off` **S05_Location_Off** |
 | `/train/:trainId` | S06 train detail + coach crowd (mono) | `loading` **S06a** · `offline` **S06b** |
@@ -125,13 +175,23 @@ The bottom navigation maps exactly as documented on the prototype's Flows page:
 
 Fully wired journeys:
 
-1. **First launch** — pick language → onboarding carousel → enter mobile number → 4-digit code → location permission → usual journey → about you → Home.
-2. **Daily commute** — Home → Smart Window (compare 08:18 / 08:30 / 08:42) → train detail → report crowd → boarding slot → zone confirmation.
-3. **Groups** — discover list → group detail → join/leave → organiser + chat. The amber `S09a` "+" opens a real create-group sheet; created groups persist and appear in the list and detail pages.
+1. **First launch** — pick language → onboarding carousel → enter mobile number → SMS code → location permission → usual journey → about you → Home. With Supabase reachable this is a real phone-OTP sign-in; otherwise it continues on a local session.
+2. **Daily commute** — Home → Smart Window (compare 08:18 / 08:30 / 08:42) → train detail → report crowd (persisted to `crowd_reports`) → boarding slot → zone confirmation.
+3. **Groups** — list → group detail → join/leave → chat. There are **no hardcoded group names**: every group is a real row you create with the "+" (on `/groups` or the amber `S09a`), and the organiser can **delete** a group from the detail page or the list. Deleting a nonexistent group renders a "Group not found" state rather than a 404.
 4. **Safety** — hold the SOS pad for 2 s → 5 s cancellable countdown → contacts notified, live elapsed timer, location sharing.
-5. **Rewards** — trip summary, points, recent trips; the amber `S12a` gear opens settings (language, large text, full reset).
+5. **Rewards & profile** — trip summary, points and recent trips (from `trips`), plus a profile card showing your name, number, route and usual departure. **Edit profile** updates name/line/stations for the whole app; the settings sheet offers language, large text, **reset** and **sign out**.
 
 State set during setup drives the rest of the app: the **name** greets you on Home, and the **line / stations / departure** you pick appear on Home, Smart Window, Virtual Queue and Rewards. The departure you choose on Smart Window is the one the queue and trip summary use.
+
+### Stations & departure time
+
+All three lines carry their full station lists, ordered south → north:
+
+- **Western** (23) — Churchgate … Dahanu Road
+- **Central** (24) — CSMT … Kasara
+- **Harbour** (32) — CSMT … Panvel
+
+Departure time is **flexible** rather than a fixed list. On `/setup` you get four quick presets (Early / Rush / Mid / Eve), a native time picker for *any* time, and a frequency selector (Weekdays / Weekends / Every day) that matches how often you actually make the journey. Everything is stored as `HH:MM` plus the frequency, and the UI formats it for display.
 
 ---
 
@@ -145,11 +205,11 @@ npm run dev
 
 Open `http://localhost:5173`, then:
 
-1. Complete onboarding (any 10-digit number unlocks **SEND CODE**; any 4-digit code is accepted).
+1. Complete onboarding (any 10-digit number unlocks **SEND CODE**; any 6-digit code is accepted — see [`VITE_OTP_LENGTH`](#backend--supabase)).
 2. Tap through Home → Smart Window → train → queue → confirm; Groups → join; Safety → hold SOS → cancel; ME → settings.
 3. Flip DevTools → Network → **Offline** and revisit `/home`, `/train/t-0830`, `/queue` — the amber offline screens appear automatically.
 4. Check each state screen listed in [the inventory](#screen--route-inventory).
-5. Reload on a deep link (e.g. `/groups/western-morning-buddies`) — it renders directly, no 404.
+5. Reload on a deep link (e.g. `/train/t-0842`) — it renders directly, no 404. A deleted or unknown group (`/groups/<id>`) shows a "Group not found" state with a way back, not a 404.
 6. Chrome → ⋮ → *Install SAATH* (or the address-bar icon) to install the PWA, then relaunch it from the desktop/taskbar icon and re-check the offline screens.
 
 ### Automated suites
@@ -207,10 +267,21 @@ The build output is `dist/`, and `vercel.json` already contains the single SPA r
 
 ### From GitHub (recommended)
 
-1. Push the project to a GitHub repository (`git init`, `git add .`, `git commit -m "SAATH PWA"`, then push).
+1. Push the project to a GitHub repository (`git init`, `git add .`, `git commit -m "SAATH PWA"`, then push). Remember that `.env.local` is git-ignored — the Supabase values are **not** committed.
 2. On [vercel.com/new](https://vercel.com/new), import the repository.
-3. Vercel auto-detects **Vite** — confirm: Framework **Vite**, Build Command `npm run build`, Output Directory `dist`. No environment variables are required.
-4. Deploy. Deep links such as `/home?state=offline` work immediately thanks to the rewrite.
+3. Vercel auto-detects **Vite** — confirm: Framework **Vite**, Build Command `npm run build`, Output Directory `dist`.
+4. Add the environment variables under *Settings → Environment Variables* (Production and Preview):
+
+   | Name | Value |
+   | --- | --- |
+   | `VITE_SUPABASE_URL` | `https://<project-ref>.supabase.co` |
+   | `VITE_SUPABASE_PUBLISHABLE_KEY` | your publishable (anon) key |
+   | `VITE_OTP_LENGTH` | `6` (or `4`, matching the dashboard OTP length) |
+
+   These are baked in at build time, so redeploy after changing them.
+5. Deploy. Deep links such as `/home?state=offline` work immediately thanks to the rewrite.
+
+> The app still deploys and runs correctly **without** these variables — it simply operates in local/demo mode, since the Supabase client is optional by design.
 
 ### With the CLI
 
@@ -226,26 +297,29 @@ After the first deploy, set **Deployment Protection → Disabled** if you want t
 
 ## Data & what still needs a backend
 
-Mock data and persistence are isolated in three places, so swapping in a real backend is a contained change:
+Persistence is split so the local fallback and the real backend are interchangeable:
 
-- `src/lib/mockData.ts` — trains, groups, members, chat, contacts, slots, trips.
-- `src/lib/store.tsx` — the Context + `localStorage` key **`saath.state.v1`** (language, name, sign-in, route, points, joined/created groups, reports). The Settings sheet (gear on `/profile?state=empty`) can reset it.
-- `src/lib/types.ts` — the domain contracts a real API would implement.
+- [`src/lib/supabase.ts`](src/lib/supabase.ts) — client creation from env, plus a network reachability probe.
+- [`src/lib/db.ts`](src/lib/db.ts) — **the only module that talks to Supabase.** Every call tries the backend (bounded by a timeout) and falls back to local state, returning `source: 'remote' | 'local'`.
+- [`src/lib/auth.tsx`](src/lib/auth.tsx) — phone-OTP session, profile sync, sign-out, and the demo-mode fallback.
+- [`src/lib/hooks.ts`](src/lib/hooks.ts) — `useGroups` / `useTrips` / `useCrowdReports` used by the screens.
+- [`src/lib/store.tsx`](src/lib/store.tsx) — the Context + `localStorage` key **`saath.state.v1`**, used as the offline cache and the fallback backend. The Settings sheet can reset it.
+- [`src/lib/mockData.ts`](src/lib/mockData.ts) — trains, contacts, slots and the station lists. Group/member/chat data is **no longer mocked** — it comes from the database.
 
-| Feature | Current (prototype) | Needs a backend |
+| Feature | Status | Still needs |
 | --- | --- | --- |
-| OTP sign-in | any 10-digit number unlocks **SEND CODE**; any 4-digit code accepted | SMS provider, OTP issue/verify, rate limiting, session tokens |
+| OTP sign-in | **real** — Supabase phone OTP, with local fallback when unreachable | SMS provider (Twilio/Vonage) + `otp_length` matched to `VITE_OTP_LENGTH` |
+| Profiles | **real** — `profiles` table, auto-created by a DB trigger; editable in-app | — |
+| Groups | **real** — create / join / leave / delete against `buddy_groups` + `group_members` | moderation + reporting tools |
+| Group chat | local per-session only | `messages` table + Supabase Realtime channel |
+| Crowd reports | **real** — written to `crowd_reports` | aggregation (recency-weighted average), abuse controls |
+| Trips & points | **real** — written to `trips` | points rules engine, reward redemption |
 | Live train data | static illustrative trains, "Not live" disclaimers | railway feed / GTFS-RT, scheduled refresh |
-| Crowd levels | static per-coach values | crowd-report ingestion, aggregation, freshness |
-| Crowd reporting | stored in `localStorage` only | anonymous report endpoint + abuse controls |
-| Groups | mock list + locally created groups | group CRUD, membership, moderation |
-| Group chat | static messages | realtime messaging, moderation |
 | Boarding slots | advisory mock slots | availability service, booking rules |
 | SOS delivery | simulated countdown + timer | SMS/push delivery to contacts, live location streaming |
-| Trusted contacts | 3 mock contacts | contact CRUD, verification |
-| Language & size prefs | device-local only | per-account sync (optional) |
+| Trusted contacts | 3 mock contacts | contact CRUD + verification |
 
-**Security:** there are no secrets in this repository. Everything the app "sends" stays in the browser; the service worker deliberately never caches `/api/` or cross-origin responses, so a future backend can be added without changing the caching policy.
+**Security:** there are no secrets in this repository. The only key shipped to the browser is a publishable (anon) key, which is designed for client use and is gated by Row Level Security on every table. No service-role key exists in the frontend. The service worker deliberately never caches `/api/` or cross-origin responses, so Supabase responses are never written to the cache.
 
 ---
 
@@ -258,12 +332,18 @@ public/
   manifest.webmanifest
   sw.js             service worker (explicit caching policy)
 src/
-  components/       DeviceFrame, StatusBar, ScreenHeader, BottomNav, Button,
-                    CrowdBadge, forms, icons, amber.tsx (shared amber system)
-  lib/              types.ts, mockData.ts, store.tsx (localStorage), useOnline.ts
+  components/       DeviceFrame, ScreenHeader, BottomNav, Button, SyncBadge,
+                    CrowdBadge, forms (incl. OtpInput), icons, amber.tsx
+  lib/              types.ts, mockData.ts, store.tsx (localStorage cache),
+                    supabase.ts (client + reachability), db.ts (data access,
+                    the only module touching Supabase), auth.tsx (phone OTP +
+                    demo fallback), hooks.ts (useGroups/useTrips/useCrowdReports),
+                    useOnline.ts
   screens/          S01…S12 (+ NotFound) — one file per design screen
   App.tsx           routes + onboarding gate
   index.css         design tokens (@theme), @font-face, device frame
+supabase/
+  migrations/       0001_init.sql — schema, RLS policies, profile trigger
 tests/              flow / pwa / responsive CDP suites (+ out/ screenshots)
 design/screens/     Figma reference renders used as ground truth
 vercel.json         SPA rewrite
@@ -277,7 +357,7 @@ These are deliberate, design-faithful decisions worth knowing when comparing aga
 
 - **Mono/amber split across the app.** The signed-in app screens are mono/Inter; the first-run journey, the b/c steps and *all* loading/empty/offline/error screens are amber/Bebas. That split is in the Figma file and is reproduced rather than normalised.
 - **Route copy is now shared, not screen-specific.** In the source file the mono Home shows *Borivali → Churchgate, 08:30* while the amber state screens show *Andheri → Churchgate, usual 08:40*. Rather than keeping two contradictory routes, every screen reads the route, name and departure from the store, so the journey stays consistent end-to-end.
-- **S03a is single-treatment amber.** The file holds a mono phone-entry screen (6-digit OTP) *and* an amber one ("we will send a 4-digit code"). The amber treatment is used for both the default and `?state=error`, and the code is entered once, on the verify step — so the user is never asked to verify twice.
+- **S03a is single-treatment amber.** The file holds a mono phone-entry screen (6-digit OTP) *and* an amber one ("we will send a 4-digit code"). The amber treatment is used for both the default and `?state=error`, and the code is entered once, on the verify step — so the user is never asked to verify twice. The number of boxes is driven by `OTP_LENGTH` (`VITE_OTP_LENGTH`, default 6 to match Supabase); set it to 4 in both the env file and the Supabase dashboard to match the amber design exactly.
 - **The 9:41 status bar is not rendered.** It is a Figma reference element, not product UI.
 - **SOS countdown is 5 s**, matching the screen copy (the flows board says 3 s; screen copy wins).
 - **Illustrative data only** — "Illustrative · Not live" disclaimers appear exactly where the design places them.

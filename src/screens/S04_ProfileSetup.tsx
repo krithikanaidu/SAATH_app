@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import { DeviceFrame } from '../components/DeviceFrame'
 import { Button } from '../components/Button'
 import { useStore } from '../lib/store'
-import type { TravelAs } from '../lib/types'
-import { DEPARTURE_TIMES, STATIONS } from '../lib/mockData'
+import { useAuth } from '../lib/auth'
+import { parseDeparture } from '../lib/db'
+import type { DepartureFrequency, TravelAs } from '../lib/types'
+import { STATIONS } from '../lib/mockData'
 
 /**
  * S04 — profile setup, rendered entirely in the amber system so the whole
@@ -88,9 +90,53 @@ function AmberSelect(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   )
 }
 
+/** Quick-pick times. Any time can also be typed in — this is a shortcut, not a limit. */
+const TIME_PRESETS = [
+  { label: 'EARLY', hhmm: '06:15' },
+  { label: 'RUSH', hhmm: '08:30' },
+  { label: 'MID', hhmm: '11:00' },
+  { label: 'EVE', hhmm: '18:45' },
+]
+
+const FREQUENCIES: { id: DepartureFrequency; label: string }[] = [
+  { id: 'weekdays', label: 'WEEKDAYS' },
+  { id: 'weekends', label: 'WEEKENDS' },
+  { id: 'daily', label: 'EVERY DAY' },
+]
+
+/** "08:30 AM · Weekdays" → "08:30" for the native time input. */
+function toHHMM(display: string): string {
+  const m = /^(\d{1,2}):(\d{2})\s*(AM|PM)/i.exec(display.trim())
+  if (m) {
+    let h = Number(m[1])
+    if (/PM/i.test(m[3]) && h !== 12) h += 12
+    if (/AM/i.test(m[3]) && h === 12) h = 0
+    return `${String(h).padStart(2, '0')}:${m[2]}`
+  }
+  const plain = /^(\d{1,2}):(\d{2})$/.exec(display.trim())
+  return plain ? `${String(Number(plain[1])).padStart(2, '0')}:${plain[2]}` : '08:30'
+}
+
+/** "08:30" → "08:30 AM" for the button label. */
+function prettyTime(hhmm: string): string {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm)
+  if (!m) return hhmm
+  const h = Number(m[1])
+  const suffix = h >= 12 ? 'PM' : 'AM'
+  const h12 = h % 12 || 12
+  return `${String(h12).padStart(2, '0')}:${m[2]} ${suffix}`
+}
+
+const DAYS_SHORT: Record<DepartureFrequency, string> = {
+  weekdays: 'Mon–Fri',
+  weekends: 'Sat–Sun',
+  daily: 'Every day',
+}
+
 export function ProfileSetup() {
   const navigate = useNavigate()
   const { state, update } = useStore()
+  const { syncProfile } = useAuth()
   const [step, setStep] = useState<'journey' | 'about'>('journey')
   const [travelAs, setTravelAs] = useState<string | null>(null)
 
@@ -191,6 +237,12 @@ export function ProfileSetup() {
       signedIn: true,
       travelAs: (travelAs as TravelAs) ?? 'woman',
     })
+    void syncProfile({
+      onboarded: true,
+      travelAs: (travelAs as TravelAs) ?? 'woman',
+      largeText: state.largeText,
+      shareLocationOnSos: state.shareLocationOnSos,
+    })
     navigate('/home')
   }
 
@@ -222,22 +274,35 @@ function JourneyForm({
   onBack: () => void
 }) {
   const { state, update } = useStore()
+  const { syncProfile } = useAuth()
   const [name, setName] = useState('')
   const [line, setLine] = useState(state.usualLine)
   const [from, setFrom] = useState(seedError ? 'Andheri' : state.fromStation)
   const [to, setTo] = useState(seedError ? 'Andheri' : state.toStation)
-  const [time, setTime] = useState(state.departureTime)
+  // departure is a plain "HH:MM" the user owns — any time, not a fixed list
+  const [time24, setTime24] = useState(toHHMM(state.departureTime))
+  const [freq, setFreq] = useState<DepartureFrequency>(state.departureFrequency ?? 'weekdays')
 
   const stations = STATIONS[line] ?? STATIONS['Western line']
   const sameStation = from === to
+  const departureDisplay = `${prettyTime(time24)} · ${DAYS_SHORT[freq]}`
 
   const save = () => {
     update({
       usualLine: line,
       fromStation: from,
       toStation: to,
-      departureTime: time,
+      departureTime: departureDisplay,
+      departureFrequency: freq,
       ...(name.trim() ? { name: name.trim() } : {}),
+    })
+    // push to the backend profile when a user is signed in
+    void syncProfile({
+      ...(name.trim() ? { name: name.trim() } : {}),
+      usualLine: line,
+      fromStation: from,
+      toStation: to,
+      departureTime: parseDeparture(departureDisplay),
     })
     onContinue()
   }
@@ -344,28 +409,72 @@ function JourneyForm({
           </div>
         ) : null}
 
-        {/* departure */}
+        {/* departure — flexible: presets, any time, and how often they travel */}
         <div className="mt-5">
           <AmberFieldLabel>USUAL DEPARTURE</AmberFieldLabel>
-          <div className="mt-2 grid grid-cols-4 gap-2" role="radiogroup" aria-label="Usual departure">
-            {DEPARTURE_TIMES.map(t => {
-              const selected = time === t
+
+          {/* quick presets */}
+          <div className="mt-2 grid grid-cols-4 gap-2" role="group" aria-label="Quick departure times">
+            {TIME_PRESETS.map(p => {
+              const selected = time24 === p.hhmm
               return (
                 <button
-                  key={t}
+                  key={p.label}
                   type="button"
-                  role="radio"
-                  aria-checked={selected}
-                  onClick={() => setTime(t)}
+                  aria-pressed={selected}
+                  onClick={() => setTime24(p.hhmm)}
                   className={`border-[3px] border-[#111111] py-3 text-[13px] font-bold transition-all active:translate-y-[1px] ${
                     selected ? 'bg-[#F9B800] shadow-[3px_3px_0_0_#111111]' : 'bg-white'
                   }`}
                 >
-                  {t.split(' · ')[0].replace(' AM', '').replace(' PM', '')}
+                  {p.label}
                 </button>
               )
             })}
           </div>
+
+          {/* free time picker — the user chooses any time that fits their routine */}
+          <div className="mt-3 flex items-stretch border-[3px] border-[#111111] bg-white focus-within:bg-[#FFF6D6]">
+            <span className="flex items-center border-r-[3px] border-[#111111] px-3 font-display text-[20px]">
+              TIME
+            </span>
+            <input
+              id="je-time"
+              type="time"
+              aria-label="Departure time"
+              value={time24}
+              onChange={e => e.target.value && setTime24(e.target.value)}
+              className="min-w-0 flex-1 bg-transparent px-3 py-4 text-[22px] tracking-[0.06em] outline-none"
+            />
+            <span className="flex items-center border-l-[3px] border-[#111111] px-3 font-display text-[20px]">
+              {prettyTime(time24)}
+            </span>
+          </div>
+
+          {/* frequency — how often they make this journey */}
+          <div className="mt-3 grid grid-cols-3 gap-2" role="radiogroup" aria-label="How often you travel">
+            {FREQUENCIES.map(f => {
+              const selected = freq === f.id
+              return (
+                <button
+                  key={f.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={selected}
+                  onClick={() => setFreq(f.id)}
+                  className={`border-[3px] border-[#111111] py-3 text-[13px] font-bold transition-all active:translate-y-[1px] ${
+                    selected ? 'bg-[#F9B800] shadow-[3px_3px_0_0_#111111]' : 'bg-white'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              )
+            })}
+          </div>
+
+          <p className="mt-2 text-[13px] leading-[17px] text-[#5A5750]">
+            Saath will suggest calmer departures around {prettyTime(time24)} on {DAYS_SHORT[freq]}.
+          </p>
         </div>
 
         <div className="flex-1" />
