@@ -7,6 +7,7 @@ const STORAGE_KEY = 'saath.state.v1'
 /** Initial state mirrors a fresh first launch (pre-onboarding). */
 const DEFAULT_STATE: AppState = {
   language: 'en',
+  name: 'Asha',
   onboarded: false,
   signedIn: false,
   phone: '',

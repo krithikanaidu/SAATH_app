@@ -34,7 +34,12 @@ for (const s of sizes) {
 
   for (const route of routes) {
     await send('Page.navigate', { url: 'http://localhost:4173' + route })
-    await new Promise(r => setTimeout(r, 1100))
+    // wait for the device frame to mount (first route also warms the SW/shell)
+    for (let i = 0; i < 20; i++) {
+      await new Promise(r => setTimeout(r, 150))
+      const has = await send('Runtime.evaluate', { expression: `!!document.querySelector('.device')`, returnByValue: true })
+      if (has.result?.value) break
+    }
     const r = await send('Runtime.evaluate', {
       expression: `JSON.stringify((() => {
         const de = document.documentElement;

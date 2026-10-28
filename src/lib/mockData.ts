@@ -152,6 +152,10 @@ export const SMART_WINDOW = {
   usual: { time: '08:30', arrival: '09:38', crowd: 'high' as const, note: 'Usual' },
   earlier: { time: '08:18', arrival: '09:26', crowd: 'medium' as const, note: '12 min earlier' },
   suggested: { time: '08:42', arrival: '09:50', crowd: 'low' as const, note: 'Lower crowd' },
+  /** minutes between the usual departure and the earlier alternative */
+  earlierGap: 12,
+  /** minutes between the usual departure and the lower-crowd suggestion */
+  laterGap: 12,
 }
 
 /** Boarding slots offered on the Virtual Queue screen (S08a). */

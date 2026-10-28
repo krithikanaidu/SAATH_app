@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useRef, type ReactNode } from 'react'
 
 /** Field label + control, matching Figma "Input/Field". */
 export function Field({
@@ -109,5 +109,61 @@ export function TextInput({
         </p>
       ) : null}
     </>
+  )
+}
+
+/**
+ * Segmented OTP entry (amber system) — used by the verify step of sign-up.
+ * Typing fills forward, backspace clears and steps back, and pasting a code
+ * distributes it across the boxes.
+ */
+export function OtpInput({
+  length = 4,
+  onChange,
+  label = 'OTP',
+}: {
+  length?: number
+  onChange: (value: string) => void
+  label?: string
+}) {
+  const refs = useRef<Array<HTMLInputElement | null>>([])
+
+  const setAt = (index: number, digit: string) => {
+    const next = refs.current.map((el, i) => (i === index ? digit : el?.value ?? ''))
+    onChange(next.join(''))
+  }
+
+  return (
+    <div role="group" aria-label={label} className="flex gap-3">
+      {Array.from({ length }, (_, i) => (
+        <input
+          key={i}
+          ref={el => {
+            refs.current[i] = el
+          }}
+          inputMode="numeric"
+          maxLength={1}
+          aria-label={`${label} digit ${i + 1}`}
+          onChange={e => {
+            const digit = e.target.value.replace(/\D/g, '').slice(-1)
+            setAt(i, digit)
+            if (digit && i < length - 1) refs.current[i + 1]?.focus()
+          }}
+          onKeyDown={e => {
+            if (e.key === 'Backspace' && !refs.current[i]?.value && i > 0) {
+              refs.current[i - 1]?.focus()
+            }
+          }}
+          onPaste={e => {
+            const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, length)
+            if (!pasted) return
+            e.preventDefault()
+            onChange(pasted.padEnd(length, ' ').trimEnd())
+            refs.current[Math.min(pasted.length, length - 1)]?.focus()
+          }}
+          className="h-[64px] w-full min-w-0 flex-1 border-[3px] border-[#111111] bg-white text-center text-[26px] font-bold outline-none focus:bg-[#FFF6D6]"
+        />
+      ))}
+    </div>
   )
 }

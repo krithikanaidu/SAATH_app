@@ -154,7 +154,7 @@ export function QuickSOS() {
     const mm = String(Math.floor(elapsed / 60)).padStart(2, '0')
     const ss = String(elapsed % 60).padStart(2, '0')
     return (
-      <DeviceFrame nav={false} theme="amber" statusVariant="amber">
+      <DeviceFrame nav={false} theme="amber">
         <div className="flex min-h-0 flex-1 flex-col px-4 pt-1 pb-5">
           <p className="mt-2 font-display text-[22px] tracking-wide uppercase">Safety</p>
           <h1 className="mt-3 font-display text-[44px] leading-[46px] tracking-wide uppercase">

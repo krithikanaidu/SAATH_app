@@ -29,7 +29,9 @@ export function SmartWindow() {
 
   const choose = () => {
     update({ chosenDeparture: selected })
-    navigate('/train/t-0842')
+    // map the picked departure onto the matching mock train
+    const trainId = selected === SMART_WINDOW.earlier.time ? 't-0818' : 't-0842'
+    navigate(`/train/${trainId}`)
   }
 
   return (
@@ -69,7 +71,7 @@ export function SmartWindow() {
               <div key={opt.id}>
                 {opt.suggested ? (
                   <p className="mb-2 text-[12px] font-bold tracking-wide">
-                    ● SUGGESTED · 12 MIN LATER
+                    ● SUGGESTED · {SMART_WINDOW.laterGap} MIN LATER
                   </p>
                 ) : null}
                 <button

@@ -79,6 +79,8 @@ export interface Trip {
 /** Persisted app state (localStorage-backed mock backend). */
 export interface AppState {
   language: Language
+  /** display name chosen during setup; falls back to "Asha" in the mock UI */
+  name: string
   onboarded: boolean
   signedIn: boolean
   phone: string

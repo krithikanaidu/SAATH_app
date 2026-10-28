@@ -1,21 +1,21 @@
 import type { ReactNode } from 'react'
-import { StatusBar } from './StatusBar'
 import { BottomNav } from './BottomNav'
 
 /**
  * Device frame — renders the 390px phone canvas from Figma.
  * `nav={false}` for full-bleed screens (onboarding, auth) that hide the tab bar.
+ *
+ * Note: the "9:41 / LTE / Wi-Fi" bar in the Figma exports is a Figma reference
+ * element only — it is intentionally not rendered in the product.
  */
 export function DeviceFrame({
   children,
   nav = true,
-  statusVariant = 'mono',
   theme = 'mono',
   bg,
 }: {
   children: ReactNode
   nav?: boolean
-  statusVariant?: 'mono' | 'amber'
   theme?: 'mono' | 'amber'
   /** overrides the theme background (S11b uses the danger-soft tint) */
   bg?: string
@@ -27,7 +27,6 @@ export function DeviceFrame({
       style={{ background: bg ?? (theme === 'amber' ? '#FAF8F4' : undefined) }}
     >
       <div className="screen">
-        <StatusBar variant={statusVariant} />
         <div className="flex min-h-0 flex-1 flex-col">{children}</div>
         {nav ? <BottomNav /> : null}
       </div>

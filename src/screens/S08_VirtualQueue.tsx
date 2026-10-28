@@ -32,6 +32,9 @@ export function VirtualQueue() {
 
   const mmss = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
 
+  // the queue is opened for the departure picked in Smart Window (or the usual one)
+  const queueTrain = TRAINS.find(t => t.departure === state.chosenDeparture) ?? TRAINS[0]
+
   /* ---------------- offline (S08c) — amber system ---------------- */
   if (offline) {
     return (
@@ -43,7 +46,7 @@ export function VirtualQueue() {
           </p>
 
           <p className="mt-4 font-display text-[28px] leading-none tracking-wide">
-            {TRAINS[0].departure} {TRAINS[0].type.toUpperCase()} · {TRAINS[0].platform.toUpperCase()}
+            {queueTrain.departure} {queueTrain.type.toUpperCase()} · {queueTrain.platform.toUpperCase()}
           </p>
 
           <p className="mt-5 font-display text-[20px] tracking-[0.04em]">CHOOSE A SLOT</p>
@@ -86,14 +89,16 @@ export function VirtualQueue() {
 
   /* ---------------- confirmed (S08b, amber) ---------------- */
   if (step === 'confirmed') {
+    const chosenSlot = BOARDING_SLOTS.find(s => s.id === slotId) ?? BOARDING_SLOTS[0]
+    const window = chosenSlot.label.split(' · ')[0]
     return (
-      <DeviceFrame nav={false} theme="amber" statusVariant="amber">
+      <DeviceFrame nav={false} theme="amber">
         <div className="flex min-h-0 flex-1 flex-col px-4 pt-1 pb-5">
           <button
             type="button"
             aria-label="Go back"
             onClick={() => navigate('/home')}
-            className="flex h-11 w-11 items-center justify-center border-2 border-[#111111] bg-white text-[22px] font-bold"
+            className="flex h-11 w-11 items-center justify-center border-2 border-[#111111] bg-white text-[22px] font-bold active:translate-y-[1px]"
           >
             ←
           </button>
@@ -105,18 +110,18 @@ export function VirtualQueue() {
 
           <div className="mt-5 border-2 border-[#111111] bg-white">
             <div className="border-b-2 border-[#111111] px-4 py-4">
-              <p className="font-display text-[28px] leading-none tracking-wide">
-                {SLOT_CONFIRMATION.window}
-              </p>
+              <p className="font-display text-[28px] leading-none tracking-wide">{window}</p>
             </div>
             <div className="grid grid-cols-3 divide-x-2 divide-[#111111] border-b-2 border-[#111111]">
-              {[SLOT_CONFIRMATION.platform, SLOT_CONFIRMATION.coach, SLOT_CONFIRMATION.queuePosition].map(
-                label => (
-                  <div key={label} className="px-2 py-3 text-center">
-                    <p className="font-display text-[15px] leading-[17px] tracking-wide">{label}</p>
-                  </div>
-                ),
-              )}
+              {[
+                queueTrain.platform.toUpperCase(),
+                `COACH ${SLOT_CONFIRMATION.coach.split(' ')[1]} ZONE`,
+                `${chosenSlot.ahead} AHEAD IN QUEUE`,
+              ].map(label => (
+                <div key={label} className="px-2 py-3 text-center">
+                  <p className="font-display text-[15px] leading-[17px] tracking-wide">{label}</p>
+                </div>
+              ))}
             </div>
             <div className="flex flex-col items-center px-4 py-5">
               <p className="font-display text-[64px] leading-none tracking-wide">{mmss}</p>
@@ -126,7 +131,9 @@ export function VirtualQueue() {
             </div>
           </div>
 
-          <p className="mt-4 text-[16px] text-[#5A5750]">Your advisory slot is confirmed.</p>
+          <p className="mt-4 text-[16px] text-[#5A5750]">
+            Your advisory slot near Zone {zone} is confirmed.
+          </p>
 
           <div className="flex-1" />
 
@@ -153,7 +160,7 @@ export function VirtualQueue() {
 
   return (
     <DeviceFrame>
-      <ScreenHeader title="" onBack={() => navigate('/train/t-0830')} />
+      <ScreenHeader title="" onBack={() => navigate(`/train/${queueTrain.id}`)} />
       <Content className="flex flex-col">
         <h1 className="text-[24px] leading-[29px] font-semibold">Virtual Queue</h1>
         <p className="mt-2 text-[14px] text-[#616161]">
@@ -163,10 +170,10 @@ export function VirtualQueue() {
         {/* trip summary */}
         <div className="mt-4 rounded-[8px] border border-[#DDDDDD] px-4 py-4">
           <p className="text-[18px] leading-[23px] font-semibold">
-            08:30 · {state.fromStation} → {state.toStation}
+            {queueTrain.departure} · {state.fromStation} → {state.toStation}
           </p>
           <p className="mt-2 text-[14px] leading-[20px] text-[#616161]">
-            Platform 3 · Ladies compartment
+            {queueTrain.platform} · Ladies compartment
           </p>
           <p className="mt-2 text-[14px] text-[#202020]">Boarding reminder in 05:40</p>
         </div>

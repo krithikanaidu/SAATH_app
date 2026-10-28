@@ -14,7 +14,7 @@ import {
   SplitButton,
 } from '../components/amber'
 import { useStore } from '../lib/store'
-import { TRAINS } from '../lib/mockData'
+import { SMART_WINDOW, TRAINS } from '../lib/mockData'
 import { urlState, useOnline } from '../lib/useOnline'
 
 /**
@@ -26,13 +26,6 @@ import { urlState, useOnline } from '../lib/useOnline'
  */
 
 type Mode = 'ready' | 'loading' | 'empty' | 'offline' | 'location-off'
-
-const AMBER_ROUTE = {
-  from: 'ANDHERI',
-  to: 'CHURCHGATE',
-  line: 'Western Line',
-  usual: '08:40',
-}
 
 export function Home() {
   const navigate = useNavigate()
@@ -57,12 +50,24 @@ export function Home() {
 
   if (mode !== 'ready') {
     return (
-      <HomeState mode={mode} onOpenSetup={() => navigate('/setup')} onOpenSmart={() => navigate('/smart-window')} onOpenTrain={(id) => navigate(`/train/${id}`)} />
+      <HomeState
+        mode={mode}
+        name={state.name}
+        route={{
+          from: state.fromStation,
+          to: state.toStation,
+          line: state.usualLine,
+          usual: state.departureTime.split(' · ')[0],
+        }}
+        onOpenSetup={() => navigate('/setup')}
+        onOpenSmart={() => navigate('/smart-window')}
+        onOpenTrain={(id) => navigate(`/train/${id}`)}
+      />
     )
   }
 
   /* ---------------- ready (S05, mono) ---------------- */
-  const firstName = 'Asha'
+  const firstName = state.name.trim().split(/\s+/)[0] || 'Asha'
   const primary = TRAINS[0]
 
   return (
@@ -77,7 +82,7 @@ export function Home() {
             {state.fromStation} → {state.toStation}
           </p>
           <p className="mt-1.5 text-[14px] text-[#616161]">
-            {state.usualLine} · Today, 08:30 AM{' '}
+            {state.usualLine} · Today, {state.departureTime.split(' · ')[0]}{' '}
             <button
               type="button"
               onClick={() => navigate('/setup')}
@@ -92,7 +97,8 @@ export function Home() {
         <div className="mt-3 rounded-[8px] bg-[#F2F2F2] px-4 py-4">
           <h2 className="text-[18px] leading-[23px] font-semibold">Your Smart Window</h2>
           <p className="mt-2 text-[16px] leading-[24px]">
-            Leave 12 minutes later for a lower-crowd option at 08:42.
+            Leave {SMART_WINDOW.laterGap} minutes later for a lower-crowd option at{' '}
+            {SMART_WINDOW.suggested.time}.
           </p>
           <button
             type="button"
@@ -151,11 +157,15 @@ export function Home() {
 
 function HomeState({
   mode,
+  name = 'Asha',
+  route,
   onOpenSetup,
   onOpenSmart,
   onOpenTrain,
 }: {
   mode: Mode
+  name?: string
+  route: { from: string; to: string; line: string; usual: string }
   onOpenSetup: () => void
   onOpenSmart: () => void
   onOpenTrain: (id: string) => void
@@ -164,7 +174,7 @@ function HomeState({
   if (mode === 'empty') {
     return (
       <AmberShell>
-        <AmberHomeHeader />
+        <AmberHomeHeader name={name} />
         <div className="px-4 pb-4">
           <AmberBox className="flex items-center justify-center px-6 py-8">
             <TrainIllustration />
@@ -189,7 +199,7 @@ function HomeState({
 
   return (
     <AmberShell>
-      <AmberHomeHeader />
+      <AmberHomeHeader name={name} />
 
       <div className="px-4 pb-3">
         {offline ? (
@@ -202,10 +212,10 @@ function HomeState({
         {/* yellow route card */}
         <AmberBox tone="amber" className="mt-3 px-5 py-5">
           <p className="font-display text-[30px] leading-none tracking-wide">
-            {AMBER_ROUTE.from} TO {AMBER_ROUTE.to}
+            {route.from.toUpperCase()} TO {route.to.toUpperCase()}
           </p>
           <p className="mt-4 text-[18px] leading-[24px]">
-            {AMBER_ROUTE.line} · Usual {AMBER_ROUTE.usual}
+            {route.line} · Usual {route.usual}
           </p>
           <button
             type="button"
@@ -231,7 +241,7 @@ function HomeState({
           ) : null}
         </AmberBox>
 
-        {/* smart suggestion card */}
+        {/* smart suggestion card — derived from the same SMART_WINDOW data S07 uses */}
         <AmberBox className="mt-7 px-4 py-4">
           <div className="flex items-center gap-3">
             <svg width="34" height="26" viewBox="0 0 34 26" fill="none" stroke="#111111" strokeWidth="2.4" aria-hidden>
@@ -239,18 +249,23 @@ function HomeState({
               <circle cx="4.5" cy="5.5" r="3" />
               <circle cx="29" cy="21.5" r="3" />
             </svg>
-            <h2 className="font-display text-[27px] leading-none tracking-wide">LEAVE 15 MIN EARLIER</h2>
+            <h2 className="font-display text-[27px] leading-none tracking-wide">
+              LEAVE {SMART_WINDOW.earlierGap} MIN EARLIER
+            </h2>
           </div>
-          <p className="mt-3 text-[17px] leading-[23px]">Estimated crowd drops from HIGH to MEDIUM.</p>
+          <p className="mt-3 text-[17px] leading-[23px]">
+            Estimated crowd drops from {SMART_WINDOW.usual.crowd.toUpperCase()} to{' '}
+            {SMART_WINDOW.earlier.crowd.toUpperCase()}.
+          </p>
 
           <div className="mt-4 flex items-center gap-4">
             <div>
-              <AmberCrowdBadge level="high" />
+              <AmberCrowdBadge level={SMART_WINDOW.usual.crowd} />
               {offline ? <p className="mt-1.5 text-[13px] tracking-wide text-[#6E6A62] uppercase">Last known</p> : null}
             </div>
             <span aria-hidden className="text-[26px]">→</span>
             <div>
-              <AmberCrowdBadge level="medium" />
+              <AmberCrowdBadge level={SMART_WINDOW.earlier.crowd} />
               {offline ? <p className="mt-1.5 text-[13px] tracking-wide text-[#6E6A62] uppercase">Last known</p> : null}
             </div>
           </div>
@@ -304,7 +319,7 @@ function HomeState({
                     <span className="text-[16px] leading-[22px]">
                       {t.platform}
                       <br />
-                      Arrives in {t.inMinutes - 2} min
+                      Arrives {t.arrival}
                     </span>
                   </span>
                   <AmberCrowdBadge level={t.crowd} />

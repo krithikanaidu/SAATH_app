@@ -117,9 +117,16 @@ await step('S02 slide3 get started -> signup', async () => {
   if (!(await path()).startsWith('/signup')) throw new Error('did not navigate: ' + await path())
 })
 await shot('s02b-amber')
-await step('S03 send code', async () => { await click('button:has-text("Send code")') })
+await step('S03 type phone -> send code', async () => {
+  await type('#phone-amber', '98765 43210')
+  const stillDisabled = await evalJs(`[...document.querySelectorAll('button')].find(b=>b.textContent.includes('SEND CODE'))?.disabled`)
+  if (stillDisabled) throw new Error('SEND CODE should enable at 10 digits')
+  await click('button:has-text("Send code")')
+  const p = await evalJs('document.body.innerText.slice(0, 120)')
+  if (!/VERIFY YOUR NUMBER/i.test(p)) throw new Error('verify step missing: ' + p)
+})
 await step('S03 fill otp', async () => {
-  await evalJs(`(() => {
+  const n = await evalJs(`(() => {
     const inputs = [...document.querySelectorAll('input[aria-label^="OTP digit"]')];
     inputs.forEach((inp, i) => {
       const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
@@ -128,17 +135,13 @@ await step('S03 fill otp', async () => {
     });
     return inputs.length;
   })()`)
+  if (n !== 4) throw new Error('expected 4 OTP boxes, got ' + n)
   await sleep(300)
-})
-await step('S03 verify -> amber verify', async () => {
-  await click('button:has-text("Verify & continue")')
-  const p = await evalJs('document.body.innerText.slice(0, 80)')
-  if (!/VERIFY YOUR NUMBER/i.test(p)) throw new Error('verify step missing: ' + p)
 })
 await shot('s03b-verify')
 await step('S03b verify and continue -> location', async () => {
   await click('button:has-text("Verify and continue")')
-  const p = await evalJs('document.body.innerText.slice(0, 80)')
+  const p = await evalJs('document.body.innerText.slice(0, 120)')
   if (!/LOCATION ACCESS/i.test(p)) throw new Error('location step missing: ' + p)
 })
 await shot('s03c-location')
@@ -146,7 +149,11 @@ await step('S03c allow location -> setup', async () => {
   await click('button:has-text("Allow location")')
   if (!(await path()).startsWith('/setup')) throw new Error('did not navigate: ' + await path())
 })
-await step('S04 save preferences -> about', async () => { await click('button:has-text("Save preferences")') })
+await step('S04 continue -> about', async () => {
+  await click('button:has-text("Continue")')
+  const p = await evalJs('document.body.innerText.slice(0, 120)')
+  if (!/ABOUT YOU/i.test(p)) throw new Error('about step missing: ' + p)
+})
 await shot('s04a-journey')
 await step('S04b save and start -> home', async () => {
   await click('button:has-text("Save and start")')
@@ -283,7 +290,7 @@ for (const [name, url, expect] of [
   ['s06b-offline', '/train/t-0830?state=offline', 'offline'],
   ['s08c-offline', '/queue?state=offline', 'offline'],
   ['s09a-empty', '/groups?state=empty', 'NO GROUPS YET'],
-  ['s03a-error', '/signup?state=error', 'ENTER YOUR PHONE NUMBER'],
+  ['s03a-error', '/signup?state=error', 'CHECK YOUR NUMBER'],
   ['s04a-error', '/setup?state=error', 'YOUR USUAL JOURNEY'],
   ['s12a-empty', '/profile?state=empty', 'No trips yet'],
 ]) {

@@ -107,7 +107,11 @@ body {
   flex-direction: column;
   width: 100%;
   max-width: 100%;
+  /* 100vh fallback first — iOS < 15.4 ignores dvh and would otherwise size to content */
+  min-height: 100vh;
   min-height: 100dvh;
+  /* in installed (standalone) mode the OS status bar overlays the top edge */
+  padding-top: env(safe-area-inset-top, 0px);
   margin: 0 auto;
   background: var(--color-surface);
   overflow: hidden;
@@ -129,7 +133,7 @@ body {
   }
 }
 
-/* screen = scrollable area between status bar and bottom nav */
+/* screen = scrollable area between the header and the bottom nav */
 .screen {
   display: flex;
   flex: 1;
@@ -138,6 +142,25 @@ body {
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+}
+
+/*
+ * Keeps the bottom tab bar clear of the OS home indicator / gesture bar when
+ * the app is installed and running in standalone mode.
+ */
+.nav-safe {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+}
+
+/*
+ * The tab bars are the last children of the scrolling `.screen` column. Pin
+ * them so long content scrolls underneath instead of pushing them off-screen
+ * (the main complaint when running the installed PWA).
+ */
+.screen > nav {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
 }
 
 /* focus visibility for keyboard users */

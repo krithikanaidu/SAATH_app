@@ -20,7 +20,7 @@ export function BottomNav() {
 
   return (
     <nav
-      className="shrink-0 border-t border-[#DDDDDD] bg-white pb-5"
+      className="nav-safe shrink-0 border-t border-[#DDDDDD] bg-white"
       aria-label="Primary"
       data-testid="bottom-nav"
     >

@@ -4,7 +4,7 @@ import { DeviceFrame, Content } from '../components/DeviceFrame'
 import { Button } from '../components/Button'
 import { ScreenHeader } from '../components/ScreenHeader'
 import { useStore } from '../lib/store'
-import { RECENT_TRIPS } from '../lib/mockData'
+import { BUDDY_GROUPS, RECENT_TRIPS } from '../lib/mockData'
 import { AmberShell, SplitButton } from '../components/amber'
 import type { Language } from '../lib/types'
 
@@ -18,6 +18,11 @@ export function Rewards() {
   const { state } = useStore()
   const empty = new URLSearchParams(location.search).get('state') === 'empty'
   const [settings, setSettings] = useState(false)
+
+  // resolve the buddy group the user actually joined (mock + custom groups)
+  const joinedGroupName = [...BUDDY_GROUPS, ...state.customGroups].find(
+    g => state.joinedGroupIds.includes(g.id),
+  )?.name
 
   /* ---------------- empty (S12a) — amber system ---------------- */
   if (empty) {
@@ -102,9 +107,10 @@ export function Rewards() {
           <p className="mt-2 text-[16px] leading-[24px]">
             {state.fromStation} → {state.toStation} · {state.usualLine.replace(' line', '')}
             <br />
-            08:42–09:50 · 68 minutes
+            {state.chosenDeparture} departure · picked from Smart Window
             <br />
-            Buddy group: Morning buddies
+            Buddy group:{' '}
+            {joinedGroupName ?? 'No buddy group joined'}
           </p>
         </div>
 

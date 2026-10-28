@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import type { CrowdLevel } from '../lib/types'
-import { StatusBar } from './StatusBar'
 
 /**
  * Shared pieces for the amber (Bebas Neue / cream / #F9B800) visual system.
@@ -159,7 +158,7 @@ const AMBER_TABS = [
 export function AmberNav() {
   const { pathname } = useLocation()
   return (
-    <nav className="shrink-0 border-t-[3px] bg-white pb-4" style={{ borderColor: AMBER_INK }} aria-label="Primary">
+    <nav className="nav-safe shrink-0 border-t-[3px] bg-white" style={{ borderColor: AMBER_INK }} aria-label="Primary">
       <ul className="flex">
         {AMBER_TABS.map(({ to, label, Icon, match }) => {
           const active = match.some(p => pathname === p || pathname.startsWith(p + '/'))
@@ -168,7 +167,7 @@ export function AmberNav() {
               <NavLink
                 to={to}
                 aria-current={active ? 'page' : undefined}
-                className="flex flex-col items-center gap-1.5 px-1 pt-3 pb-1"
+                className="flex flex-col items-center gap-1.5 px-1 pt-3 pb-1 transition-transform active:translate-y-[1px]"
               >
                 <span
                   className={`flex h-9 w-9 items-center justify-center border-[3px] ${
@@ -196,7 +195,7 @@ export function AmberNav() {
 /* ---------------- amber shell ---------------- */
 
 /**
- * Full amber frame: cream background, amber status bar, optional amber tab bar.
+ * Full amber frame: cream background, optional amber tab bar.
  * `back` renders the squared back button used on stack screens.
  */
 export function AmberShell({
@@ -218,7 +217,6 @@ export function AmberShell({
   return (
     <div className="device" style={{ background: bg ?? AMBER_BG }}>
       <div className="screen">
-        <StatusBar variant="amber" />
         <div className="flex min-h-0 flex-1 flex-col" style={{ color: AMBER_INK }}>
           {back || title ? (
             <div className="flex items-center gap-4 px-4 pt-2 pb-3">
@@ -244,7 +242,7 @@ export function AmberShell({
         {nav ? (
           <AmberNav />
         ) : (
-          <div className="shrink-0 px-4 pt-2 pb-3">
+          <div className="nav-safe px-4 pt-2">
             <div aria-hidden className="mx-auto h-[5px] w-[134px] rounded-full bg-black" />
           </div>
         )}
@@ -317,12 +315,19 @@ function IconMeA() {
   )
 }
 
-/** amber home header: GOOD MORNING, ASHA + bell + avatar */
-export function AmberHomeHeader() {
+/** amber home header: GOOD MORNING, <name> + bell + avatar */
+export function AmberHomeHeader({ name = 'Asha' }: { name?: string }) {
+  const first = name.trim().split(/\s+/)[0] || 'Asha'
+  const initials = name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map(w => w[0]?.toUpperCase() ?? '')
+    .join('') || 'AS'
   return (
     <header className="flex items-center gap-3 px-4 pt-3 pb-2">
       <p className="font-display text-[19px] tracking-[0.06em] uppercase">Good morning,</p>
-      <p className="font-display text-[40px] leading-none tracking-wide">ASHA</p>
+      <p className="font-display text-[40px] leading-none tracking-wide uppercase">{first}</p>
       <div className="ml-auto flex items-center gap-3">
         <button
           type="button"
@@ -340,7 +345,7 @@ export function AmberHomeHeader() {
           className="flex h-[46px] w-[46px] items-center justify-center border-[3px] font-display text-[19px]"
           style={{ background: AMBER, borderColor: AMBER_INK }}
         >
-          AS
+          {initials}
         </span>
       </div>
     </header>
