@@ -2,7 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-route
 import { useEffect } from 'react'
 import { StoreProvider, useStore } from './lib/store'
 import { AuthProvider } from './lib/auth'
-import { Analytics } from "@vercel/analytics/next"
+import { Analytics } from "@vercel/analytics/react"
 import { SplashLanguage } from './screens/S01_SplashLanguage'
 import { Onboarding } from './screens/S02_Onboarding'
 import { SignUp } from './screens/S03_SignUp'
@@ -123,6 +123,7 @@ export default function App() {
       <AuthProvider>
         <BrowserRouter>
           <AppRoutes />
+          <Analytics />
         </BrowserRouter>
       </AuthProvider>
     </StoreProvider>
